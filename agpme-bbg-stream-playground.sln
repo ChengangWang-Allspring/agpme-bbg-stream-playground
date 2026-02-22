@@ -9,6 +9,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Agpme.Bbg.Stream.Playground
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agpme.Bbg.Stream.DevBootstrap", "Agpme.Bbg.Stream.DevBootstrap\Agpme.Bbg.Stream.DevBootstrap.csproj", "{B5CE70AB-EEB9-4F78-9646-84BE90794E17}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agpme.Bbg.Stream.Playground.Client", "Agpme.Bbg.Stream.Playground.Client\Agpme.Bbg.Stream.Playground.Client.csproj", "{8CD6FE14-12D9-479F-AD9F-53BB4531D43D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{B5CE70AB-EEB9-4F78-9646-84BE90794E17}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B5CE70AB-EEB9-4F78-9646-84BE90794E17}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B5CE70AB-EEB9-4F78-9646-84BE90794E17}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8CD6FE14-12D9-479F-AD9F-53BB4531D43D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8CD6FE14-12D9-479F-AD9F-53BB4531D43D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8CD6FE14-12D9-479F-AD9F-53BB4531D43D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8CD6FE14-12D9-479F-AD9F-53BB4531D43D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
