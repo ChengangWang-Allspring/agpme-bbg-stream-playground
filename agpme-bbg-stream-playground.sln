@@ -3,13 +3,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.10.35013.160
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Agpme.Bbg.Stream.Playground.Shared", "Agpme.Bbg.Stream.Playground.Shared\Agpme.Bbg.Stream.Playground.Shared.csproj", "{0CC5927B-5825-413A-AF74-2FA15B2417FC}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Agpme.Bbg.Playground.Shared", "Agpme.Bbg.Playground.Shared\Agpme.Bbg.Playground.Shared.csproj", "{0CC5927B-5825-413A-AF74-2FA15B2417FC}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Agpme.Bbg.Stream.Playground.Server", "Agpme.Bbg.Stream.Playground.Server\Agpme.Bbg.Stream.Playground.Server.csproj", "{DB3AF079-BAE9-4DFE-939E-E63CFC4381D9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Agpme.Bbg.Playground.Simulator.Api", "Agpme.Bbg.Playground.Simulator.Api\Agpme.Bbg.Playground.Simulator.Api.csproj", "{DB3AF079-BAE9-4DFE-939E-E63CFC4381D9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agpme.Bbg.Stream.DevBootstrap", "Agpme.Bbg.Stream.DevBootstrap\Agpme.Bbg.Stream.DevBootstrap.csproj", "{B5CE70AB-EEB9-4F78-9646-84BE90794E17}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agpme.Bbg.Playground.Bootstrap", "Agpme.Bbg.Playground.Bootstrap\Agpme.Bbg.Playground.Bootstrap.csproj", "{B5CE70AB-EEB9-4F78-9646-84BE90794E17}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agpme.Bbg.Stream.Playground.Client", "Agpme.Bbg.Stream.Playground.Client\Agpme.Bbg.Stream.Playground.Client.csproj", "{8CD6FE14-12D9-479F-AD9F-53BB4531D43D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agpme.Bbg.Playground.Subscriptions.Api", "Agpme.Bbg.Playground.Subscriptions.Api\Agpme.Bbg.Playground.Subscriptions.Api.csproj", "{8CD6FE14-12D9-479F-AD9F-53BB4531D43D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

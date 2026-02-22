@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Agpme.Bbg.Playground.Bootstrap": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "dev"
+      }
+    }
+  }
+}
