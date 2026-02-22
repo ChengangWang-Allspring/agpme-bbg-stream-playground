@@ -7,11 +7,6 @@ namespace Agpme.Bbg.Stream.Playground.Client.Services;
 
 public static class StreamConsumer
 {
-    /// <summary>
-    /// Consumes the streaming endpoint and reports lifecycle events via the provided logger.
-    /// NOTE: If you also persist (initial batch & intraday), inject/pass an IPositionStreamPersister
-    /// and call into it at the two indicated hooks below.
-    /// </summary>
     public static async Task RunAsync(
         HttpClient http,
         PlaygroundClientOptions opts,
@@ -30,20 +25,100 @@ public static class StreamConsumer
         log.Information("Subscription start → {EntityType}/{EntityName} as_of_date={AsOf} chunk={Chunk}",
                         key.entityType, key.entityName, asOf, opts.Chunk);
 
+        // --- connect (isolated) ---
+        using var res = await ConnectForStreamingAsync(http, uri, key, metrics, log, ct);
+        if (res is null) return; // error path already handled/logged
+
+        using var stream = await res.Content.ReadAsStreamAsync(ct);
+
+        // --- state ---
+        metrics.State = SubscriptionState.InitialPaint;
+        var asOfDate = DateOnly.Parse(asOf);
+        var initialBatch = new List<string>();
+        var initialPersisted = false;
+
+        // --- read/process loop (flat) ---
+        await foreach (var json in ReadJsonObjectsAsync(stream, log, ct))
+        {
+            metrics.LastMessageAt = DateTimeOffset.UtcNow;
+
+            if (IsHeartbeat(json))
+            {
+                // FIRST {} ends initial paint (client rule)
+                if (metrics.State == SubscriptionState.InitialPaint && !initialPersisted)
+                {
+                    var ok = await HandleFirstHeartbeatEndsInitialAsync(
+                        initialBatch, key, asOfDate, persister, metrics, log, ct);
+                    if (!ok) return; // error already logged/set
+                    initialBatch.Clear();
+                    initialPersisted = true;
+                    log.Information("InitialPaint complete → entering Intraday → {EntityType}/{EntityName}", key.entityType, key.entityName);
+                    metrics.State = SubscriptionState.Intraday;
+                    continue; // don’t count this {} as a steady heartbeat
+                }
+
+                metrics.Heartbeats++;
+                continue;
+            }
+
+            // Non-empty JSON → route by state
+            switch (metrics.State)
+            {
+                case SubscriptionState.InitialPaint:
+                    BufferInitialPayload(initialBatch, json, metrics, log);
+                    break;
+
+                case SubscriptionState.Intraday:
+                    if (!await HandleIntradayPayloadAsync(json, key, asOfDate, persister, metrics, log, ct))
+                        return; // error already logged/set
+                    break;
+
+                default:
+                    // If we ever get here, treat as no-op but log once
+                    log.Debug("Ignoring payload in state {State} → {EntityType}/{EntityName}",
+                              metrics.State, key.entityType, key.entityName);
+                    break;
+            }
+        }
+
+        // cancelled or stream closed
+        metrics.State = SubscriptionState.Stopped;
+        metrics.StoppedAt = DateTimeOffset.UtcNow;
+        log.Information("Subscription stopped → {EntityType}/{EntityName}", key.entityType, key.entityName);
+    }
+
+    // ---------- helpers ----------
+
+    private static bool IsHeartbeat(string json)
+        => json.Length <= 2 && json.Trim() == "{}";
+
+    private static async Task<HttpResponseMessage?> ConnectForStreamingAsync(
+        HttpClient http, string uri, SubscriptionKey key, SubscriptionMetrics metrics, Serilog.ILogger log, CancellationToken ct)
+    {
         using var req = new HttpRequestMessage(HttpMethod.Post, uri);
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        HttpResponseMessage res;
         try
         {
-            res = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            var res = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (!res.IsSuccessStatusCode)
+            {
+                log.Error("HTTP {Status} for {EntityType}/{EntityName} (expected 200). Aborting.",
+                          (int)res.StatusCode, key.entityType, key.entityName);
+                metrics.LastError = $"HTTP {(int)res.StatusCode}";
+                metrics.State = SubscriptionState.Error;
+                metrics.StoppedAt = DateTimeOffset.UtcNow;
+                return null;
+            }
+            log.Information("Connected (headers received) → {EntityType}/{EntityName}", key.entityType, key.entityName);
+            return res;
         }
         catch (OperationCanceledException)
         {
             log.Warning("Subscription canceled before connection → {EntityType}/{EntityName}", key.entityType, key.entityName);
             metrics.State = SubscriptionState.Stopped;
             metrics.StoppedAt = DateTimeOffset.UtcNow;
-            return;
+            return null;
         }
         catch (Exception ex)
         {
@@ -51,167 +126,98 @@ public static class StreamConsumer
             metrics.LastError = ex.Message;
             metrics.State = SubscriptionState.Error;
             metrics.StoppedAt = DateTimeOffset.UtcNow;
-            return;
+            return null;
         }
+    }
 
-        if (!res.IsSuccessStatusCode)
-        {
-            log.Error("HTTP {Status} for {EntityType}/{EntityName} (expected 200). Aborting.",
-                      (int)res.StatusCode, key.entityType, key.entityName);
-            metrics.LastError = $"HTTP {(int)res.StatusCode}";
-            metrics.State = SubscriptionState.Error;
-            metrics.StoppedAt = DateTimeOffset.UtcNow;
-            return;
-        }
+    private static void BufferInitialPayload(List<string> initialBatch, string json, SubscriptionMetrics metrics, Serilog.ILogger log)
+    {
+        initialBatch.Add(json);         
+        metrics.InitialPaintObjects++;
+        if (metrics.InitialPaintObjects % 50 == 0)
+            log.Information("InitialPaint received {Count} so far", metrics.InitialPaintObjects);
+    }
 
-        log.Information("Connected (headers received) → {EntityType}/{EntityName}", key.entityType, key.entityName);
-
-        using var stream = await res.Content.ReadAsStreamAsync(ct);
-        var buffer = new byte[8192];
-        var sb = new StringBuilder(capacity: 16 * 1024);
-
-        metrics.State = SubscriptionState.InitialPaint;
-        var initialBatch = new List<string>();
-        var asOfDateOnly = DateOnly.Parse(asOf);
-        bool initialPersisted = false; // ensure we only do it once
-
-        log.Debug("Entering read loop → {EntityType}/{EntityName}", key.entityType, key.entityName);
-
+    private static async Task<bool> HandleFirstHeartbeatEndsInitialAsync(
+        List<string> initialBatch,
+        SubscriptionKey key,
+        DateOnly asOfDate,
+        IPositionInboundPersister persister,
+        SubscriptionMetrics metrics,
+        Serilog.ILogger log,
+        CancellationToken ct)
+    {
         try
         {
-            while (!ct.IsCancellationRequested)
-            {
-                var read = await stream.ReadAsync(buffer, 0, buffer.Length, ct);
-                if (read == 0)
-                {
-                    log.Debug("Zero-byte read; backing off 50ms → {EntityType}/{EntityName}", key.entityType, key.entityName);
-                    await Task.Delay(50, ct);
-                    continue;
-                }
-
-                var chunk = Encoding.UTF8.GetString(buffer, 0, read);
-                sb.Append(chunk);
-
-                var extracted = ExtractCompleteJsonObjects(sb).ToList();
-                if (extracted.Count > 0)
-                {
-                    log.Debug("Extracted {Count} JSON object(s) → {EntityType}/{EntityName}",
-                              extracted.Count, key.entityType, key.entityName);
-                }
-
-                foreach (var json in extracted)
-                {
-                    metrics.LastMessageAt = DateTimeOffset.UtcNow;
-
-                    var isHeartbeat = json.Length <= 2 && json.Trim() == "{}";
-
-                    // ---------- Client rule: FIRST {} ends InitialPaint ----------
-                    if (metrics.State == SubscriptionState.InitialPaint && isHeartbeat && !initialPersisted)
-                    {
-                        // Persist & upsert the initial batch immediately (even if batch is empty)
-                        try
-                        {
-                            log.Information("InitialPaint end marker received (first {{}}) → persisting initial batch ({Count})",
-                                            initialBatch.Count);
-
-                            await persister.PersistInitialBatchToInboundAsync(initialBatch, key, asOfDateOnly, ct);
-                            await persister.CallUpsertInitialAsync(key, asOfDateOnly, ct);
-
-                            log.Information("InitialPaint batch persisted & upserted → {EntityType}/{EntityName}",
-                                            key.entityType, key.entityName);
-                            initialPersisted = true;
-                        }
-                        catch (Exception ex)
-                        {
-                            metrics.LastError = ex.Message;
-                            metrics.State = SubscriptionState.Error;
-                            log.Error(ex, "InitialPaint persist/upsert failed → {EntityType}/{EntityName}", key.entityType, key.entityName);
-                            return;
-                        }
-                        finally
-                        {
-                            initialBatch.Clear();
-                        }
-
-                        metrics.State = SubscriptionState.Intraday;
-                        continue; // do not treat this {} as a heartbeat for steady state
-                    }
-
-                    if (isHeartbeat)
-                    {
-                        metrics.Heartbeats++;
-                        // (optional log) log.Debug("Heartbeat in {State} → {EntityType}/{EntityName}", metrics.State, key.entityType, key.entityName);
-                        continue;
-                    }
-
-                    // Non-empty JSON
-                    if (metrics.State == SubscriptionState.InitialPaint)
-                    {
-                        metrics.InitialPaintObjects++;
-                        initialBatch.Add(json);
-
-                        if (metrics.InitialPaintObjects % 50 == 0)
-                        {
-                            log.Information("InitialPaint received {Count} so far → {EntityType}/{EntityName}",
-                                            metrics.InitialPaintObjects, key.entityType, key.entityName);
-                        }
-                    }
-                    else // Steady (intraday)
-                    {
-                        metrics.IntradayObjects++;
-
-                        try
-                        {
-                            // Split: persist first, then call upsert
-                            await persister.PersistIntradayToInboundAsync(json, key, asOfDateOnly, ct);
-                            await persister.CallUpsertIntradayAsync(json, key, asOfDateOnly, ct);
-                        }
-                        catch (Exception ex)
-                        {
-                            metrics.LastError = ex.Message;
-                            metrics.State = SubscriptionState.Error;
-                            log.Error(ex, "Intraday persist/upsert failed → {EntityType}/{EntityName}", key.entityType, key.entityName);
-                            return;
-                        }
-
-                        if (metrics.IntradayObjects % 100 == 0)
-                        {
-                            log.Information("Intraday received {Count} so far → {EntityType}/{EntityName}",
-                                            metrics.IntradayObjects, key.entityType, key.entityName);
-                        }
-                    }
-                }
-            }
-
-            log.Warning("Cancellation requested → exiting read loop → {EntityType}/{EntityName}", key.entityType, key.entityName);
-        }
-        catch (OperationCanceledException)
-        {
-            log.Warning("Subscription canceled during read → {EntityType}/{EntityName}", key.entityType, key.entityName);
-            metrics.State = SubscriptionState.Stopped;
-            metrics.StoppedAt = DateTimeOffset.UtcNow;
-            return;
+            log.Information("InitialPaint end marker (first {{}}) → persisting initial batch ({Count})",
+                            initialBatch.Count);
+            await persister.PersistInitialBatchToInboundAsync(initialBatch, key, asOfDate, ct);
+            await persister.CallUpsertInitialAsync(key, asOfDate, ct);
+            log.Information("InitialPaint batch persisted & upserted → {EntityType}/{EntityName}",
+                            key.entityType, key.entityName);
+            return true;
         }
         catch (Exception ex)
         {
-            log.Error(ex, "Read loop error → {EntityType}/{EntityName}", key.entityType, key.entityName);
             metrics.LastError = ex.Message;
             metrics.State = SubscriptionState.Error;
-            metrics.StoppedAt = DateTimeOffset.UtcNow;
-            return;
+            log.Error(ex, "InitialPaint persist/upsert failed → {EntityType}/{EntityName}", key.entityType, key.entityName);
+            return false;
         }
-
-        metrics.State = SubscriptionState.Stopped;
-        metrics.StoppedAt = DateTimeOffset.UtcNow;
-        log.Information("Subscription stopped → {EntityType}/{EntityName}", key.entityType, key.entityName);
     }
 
+    private static async Task<bool> HandleIntradayPayloadAsync(
+        string json,
+        SubscriptionKey key,
+        DateOnly asOfDate,
+        IPositionInboundPersister persister,
+        SubscriptionMetrics metrics,
+        Serilog.ILogger log,
+        CancellationToken ct)
+    {
+        try
+        {
+            await persister.PersistIntradayToInboundAsync(json, key, asOfDate, ct);
+            await persister.CallUpsertIntradayAsync(json, key, asOfDate, ct);
+            metrics.IntradayObjects++;
+            if (metrics.IntradayObjects % 100 == 0)
+                log.Information("Intraday received {Count} so far → {EntityType}/{EntityName}",
+                                metrics.IntradayObjects, key.entityType, key.entityName);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            metrics.LastError = ex.Message;
+            metrics.State = SubscriptionState.Error;
+            log.Error(ex, "Intraday persist/upsert failed → {EntityType}/{EntityName}", key.entityType, key.entityName);
+            return false;
+        }
+    }
 
+    private static async IAsyncEnumerable<string> ReadJsonObjectsAsync(global::System.IO.Stream stream, Serilog.ILogger log, [System.Runtime.CompilerServices.EnumeratorCancellation] System.Threading.CancellationToken ct)
+    {
+        var buffer = new byte[8192];
+        var sb = new StringBuilder(capacity: 16 * 1024);
 
-    /// <summary>
-    /// Parses the StringBuilder buffer and yields complete JSON objects as strings,
-    /// even when incoming bytes split objects across chunks. Maintains state in 'sb'.
-    /// </summary>
+        while (!ct.IsCancellationRequested)
+        {
+            var read = await stream.ReadAsync(buffer, 0, buffer.Length, ct);
+            if (read == 0)
+            {
+                await Task.Delay(50, ct);
+                continue;
+            }
+
+            var chunk = Encoding.UTF8.GetString(buffer, 0, read);
+            sb.Append(chunk);
+
+            var extracted = ExtractCompleteJsonObjects(sb);
+            foreach (var json in extracted)
+                yield return json;
+        }
+    }
+
+    // Reuse your existing extractor unchanged (brace-depth with string/escape handling)
     private static IEnumerable<string> ExtractCompleteJsonObjects(StringBuilder sb)
     {
         var s = sb.ToString();
@@ -250,11 +256,12 @@ public static class StreamConsumer
             }
         }
 
-        // remove consumed prefix (up to the last complete JSON)
         if (results.Count > 0)
         {
             var last = results[^1];
-            var endIdx = s.IndexOf(last, StringComparison.Ordinal) + last.Length;
+            var endIdx = s.LastIndexOf(last, StringComparison.Ordinal) + last.Length;
+            sb.Remove(0, endIdx);
+
             sb.Remove(0, endIdx);
         }
         return results;

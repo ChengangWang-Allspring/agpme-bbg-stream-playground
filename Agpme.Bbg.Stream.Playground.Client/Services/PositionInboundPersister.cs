@@ -13,6 +13,11 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
     private readonly string _cs;
     private readonly Serilog.ILogger _log;
 
+    // Cache for inbound column map (thread-safe lazy init)
+    private readonly object _mapLock = new();
+    private volatile Task<List<ColMap>>? _mapTask = null;
+
+
     public PositionInboundPersister(IConfiguration cfg)
     {
         _cs = cfg.GetSection("ClientDb:ConnectionString").Value
@@ -21,6 +26,22 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
     }
 
     private sealed record ColMap(string SourceColumn, string SourceKind);
+
+    private Task<List<ColMap>> GetInboundColumnMapCachedAsync(NpgsqlConnection conn, CancellationToken ct)
+    {
+        // Fast path: already initiated
+        var task = _mapTask;
+        if (task is not null) return task;
+
+        lock (_mapLock)
+        {
+            if (_mapTask is not null) return _mapTask;
+
+            // Create the load Task ONCE; all threads will await the same Task
+            _mapTask = GetInboundColumnMapAsync(conn, ct);
+            return _mapTask;
+        }
+    }
 
     private static async Task<List<ColMap>> GetInboundColumnMapAsync(NpgsqlConnection conn, CancellationToken ct)
     {
@@ -43,6 +64,18 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
         }
         return cols;
     }
+
+
+    public Task RefreshColumnMapAsync(CancellationToken ct = default)
+    {
+        lock (_mapLock)
+        {
+            _mapTask = null; // next call will re-load
+        }
+        _log.Information("Inbound column map cache cleared by request.");
+        return Task.CompletedTask;
+    }
+
 
     private static object? GetLoaderValueText(SubscriptionKey key, DateOnly asOf, string colName, bool isIntraday, string? accountFromJson)
         => colName.ToLowerInvariant() switch
@@ -75,7 +108,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
         await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
 
-        var map = await GetInboundColumnMapAsync(conn, ct);
+        var map = await GetInboundColumnMapCachedAsync(conn, ct);
         var colList = string.Join(", ", map.Select(m => $"\"{m.SourceColumn}\""));
         var copySql = $"COPY app_data.bbg_positions_inbound ({colList}) FROM STDIN (FORMAT BINARY)";
 
@@ -144,7 +177,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
         await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
 
-        var map = await GetInboundColumnMapAsync(conn, ct);
+        var map = await GetInboundColumnMapCachedAsync(conn, ct);
         var colList = string.Join(", ", map.Select(m => $"\"{m.SourceColumn}\""));
         var copySql = $"COPY app_data.bbg_positions_inbound ({colList}) FROM STDIN (FORMAT BINARY)";
 
