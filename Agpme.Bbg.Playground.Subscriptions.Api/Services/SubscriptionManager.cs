@@ -2,6 +2,7 @@
 using Agpme.Bbg.Playground.Subscriptions.Api.Configuration;
 using Agpme.Bbg.Playground.Subscriptions.Api.Models;
 using Microsoft.Extensions.Options;
+using Serilog;
 
 namespace Agpme.Bbg.Playground.Subscriptions.Api.Services;
 
@@ -44,6 +45,9 @@ public sealed class SubscriptionManager : ISubscriptionManager
         if (_running.ContainsKey(key))
             return _running[key].Status;
 
+        // --- Orchestrator summary logs ---
+        Log.Information("SUBSCRIPTION START requested → {EntityType}/{EntityName}", key.entityType, key.entityName);
+
         var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var status = new SubscriptionStatus
         {
@@ -67,6 +71,10 @@ public sealed class SubscriptionManager : ISubscriptionManager
 
         _running[key] = (task, cts, status);
 
+        // If we got this far, the task is scheduled — treat as "started"
+        Log.Information("SUBSCRIPTION STARTED → {EntityType}/{EntityName} (state={State})",
+            key.entityType, key.entityName, status.Metrics.State);
+
         _ = task.ContinueWith(t =>
         {
             try
@@ -75,10 +83,17 @@ public sealed class SubscriptionManager : ISubscriptionManager
                 {
                     status.Metrics.LastError = t.Exception?.GetBaseException().Message;
                     status.Metrics.State = SubscriptionState.Error;
+                    Log.Error(t.Exception?.GetBaseException(),
+                                            "SUBSCRIPTION ERROR → {EntityType}/{EntityName} (error={Error})",
+                                            key.entityType, key.entityName, status.Metrics.LastError);
+
                 }
                 else
                 {
                     status.Metrics.State = SubscriptionState.Stopped;
+                    Log.Information("SUBSCRIPTION STOPPED → {EntityType}/{EntityName}",
+                                            key.entityType, key.entityName);
+
                 }
                 status.Metrics.StoppedAt = DateTimeOffset.UtcNow;
                 _running.TryRemove(key, out _);
@@ -96,11 +111,13 @@ public sealed class SubscriptionManager : ISubscriptionManager
 
     public Task<bool> StopAsync(SubscriptionKey key)
     {
+        Log.Information("SUBSCRIPTION STOP requested → {EntityType}/{EntityName}", key.entityType, key.entityName);
         if (_running.TryRemove(key, out var v))
         {
             v.Cts.Cancel();
             return Task.FromResult(true);
         }
+        Log.Information("SUBSCRIPTION STOP not found → {EntityType}/{EntityName}", key.entityType, key.entityName);
         return Task.FromResult(false);
     }
 }

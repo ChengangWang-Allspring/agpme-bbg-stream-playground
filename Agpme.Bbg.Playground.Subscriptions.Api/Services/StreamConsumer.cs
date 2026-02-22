@@ -171,8 +171,8 @@ public static class StreamConsumer
             log.Information("InitialPaint end marker (first {{}}) → persisting initial batch ({Count})",
                             initialBatch.Count);
 
-            await persister.PersistInitialBatchToInboundAsync(initialBatch, key, asOfDate, msgRequestId, ct);
-            await persister.CallUpsertInitialAsync(key, asOfDate, msgRequestId, ct);
+            await persister.PersistInitialBatchToInboundAsync(initialBatch, key, asOfDate, msgRequestId, log, ct);
+            await persister.CallUpsertInitialAsync(key, asOfDate, msgRequestId, log, ct);
 
             log.Information("InitialPaint batch persisted & upserted → {EntityType}/{EntityName}",
                             key.entityType, key.entityName);
@@ -199,8 +199,10 @@ public static class StreamConsumer
     {
         try
         {
-            await persister.PersistIntradayToInboundAsync(json, key, asOfDate, msgRequestId, ct);
-            await persister.CallUpsertIntradayAsync(json, key, asOfDate, msgRequestId, ct);
+
+            await persister.PersistIntradayToInboundAsync(json, key, asOfDate, msgRequestId, log, ct);
+            await persister.CallUpsertIntradayAsync(json, key, asOfDate, msgRequestId, log, ct);
+
             metrics.IntradayObjects++;
             if (metrics.IntradayObjects % 100 == 0)
                 log.Information("Intraday received {Count} so far → {EntityType}/{EntityName}",

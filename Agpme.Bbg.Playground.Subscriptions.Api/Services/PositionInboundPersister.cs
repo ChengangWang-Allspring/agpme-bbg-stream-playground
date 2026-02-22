@@ -11,7 +11,6 @@ namespace Agpme.Bbg.Playground.Subscriptions.Api.Services;
 public sealed class PositionInboundPersister : IPositionInboundPersister
 {
     private readonly string _cs;
-    private readonly Serilog.ILogger _log;
 
     // Cache for inbound column map (thread-safe lazy init)
     private readonly object _mapLock = new();
@@ -22,7 +21,6 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
     {
         _cs = cfg.GetSection("ClientDb:ConnectionString").Value
               ?? throw new InvalidOperationException("ClientDb:ConnectionString is not configured.");
-        _log = Log.ForContext<PositionInboundPersister>();
     }
 
     private sealed record ColMap(string SourceColumn, string SourceKind);
@@ -72,7 +70,6 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
         {
             _mapTask = null; // next call will re-load
         }
-        _log.Information("Inbound column map cache cleared by request.");
         return Task.CompletedTask;
     }
 
@@ -103,7 +100,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
 
     // -------------------- Initial paint (batch) --------------------
 
-    public async Task PersistInitialBatchToInboundAsync(List<string> jsons, SubscriptionKey key, DateOnly asOf, string msgRequestId, CancellationToken ct)
+    public async Task PersistInitialBatchToInboundAsync(List<string> jsons, SubscriptionKey key, DateOnly asOf, string msgRequestId, Serilog.ILogger log, CancellationToken ct)
     {
         await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -112,8 +109,8 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
         var colList = string.Join(", ", map.Select(m => $"\"{m.SourceColumn}\""));
         var copySql = $"COPY app_data.bbg_positions_inbound ({colList}) FROM STDIN (FORMAT BINARY)";
 
-        _log.Information("[INBOUND BEFORE] Initial batch → rows={Count}, entity={EntityType}/{EntityName}, as_of={AsOf}",
-                         jsons.Count, key.entityType, key.entityName, asOf);
+        log.Information("[INBOUND BEFORE] Initial batch → rows={Count}, entity={EntityType}/{EntityName}, as_of={AsOf}",
+               jsons.Count, key.entityType, key.entityName, asOf);
 
         await using (var writer = await conn.BeginBinaryImportAsync(copySql, ct))
         {
@@ -143,19 +140,20 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
             await writer.CompleteAsync(ct);
         }
 
-        _log.Information("[INBOUND AFTER] Initial batch persisted → rows={Count}, entity={EntityType}/{EntityName}, as_of={AsOf}",
-                         jsons.Count, key.entityType, key.entityName, asOf);
+        log.Information("[INBOUND AFTER] Initial batch persisted → rows={Count}, entity={EntityType}/{EntityName}, as_of={AsOf}",
+               jsons.Count, key.entityType, key.entityName, asOf);
+
     }
 
-    public async Task CallUpsertInitialAsync(SubscriptionKey key, DateOnly asOf, string msgRequestId, CancellationToken ct)
+    public async Task CallUpsertInitialAsync(SubscriptionKey key, DateOnly asOf, string msgRequestId, Serilog.ILogger log, CancellationToken ct)
     {
         await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
 
         const string procName = "app_data.bbg_upsert_positions_from_inbound";
 
-        _log.Information("[UPSERT BEFORE] Initial → proc={Proc}, p_is_intraday={Intraday}, p_load_process={ProcName}, p_as_of_date={AsOf}, p_account_id_intraday=null, p_load_bb_entity_name={EntityName}",
-                         procName, false, "playground-client", asOf, key.entityName);
+        log.Information("[UPSERT BEFORE] Initial → proc={Proc}, p_is_intraday={Intraday}, p_load_process={ProcName}, p_as_of_date={AsOf}, p_account_id_intraday=null, p_load_bb_entity_name={EntityName}",
+               procName, false, "playground-client", asOf, key.entityName);
 
         await using var call = new NpgsqlCommand(
             $"CALL {procName} (@p_is_intraday, @p_load_process, @p_as_of_date, @p_account_id_intraday, @p_load_bb_entity_name)", conn);
@@ -166,13 +164,14 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
         call.Parameters.AddWithValue("p_load_bb_entity_name", key.entityName);
         await call.ExecuteNonQueryAsync(ct);
 
-        _log.Information("[UPSERT AFTER] Initial complete → entity={EntityType}/{EntityName}, as_of={AsOf}",
-                         key.entityType, key.entityName, asOf);
+        log.Information("[UPSERT AFTER] Initial complete → entity={EntityType}/{EntityName}, as_of={AsOf}",
+               key.entityType, key.entityName, asOf);
+
     }
 
     // -------------------- Intraday (one-by-one) --------------------
 
-    public async Task PersistIntradayToInboundAsync(string json, SubscriptionKey key, DateOnly asOf, string msgRequestId, CancellationToken ct)
+    public async Task PersistIntradayToInboundAsync(string json, SubscriptionKey key, DateOnly asOf, string msgRequestId, Serilog.ILogger log, CancellationToken ct)
     {
         await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -184,8 +183,8 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
         var j = string.IsNullOrWhiteSpace(json) ? new JObject() : JObject.Parse(json);
         var accountFromJson = GetJsonTextOrNull(j, "ACCOUNT");
 
-        _log.Information("[INBOUND BEFORE] Intraday → entity={EntityType}/{EntityName}, account={Account}, as_of={AsOf}",
-                         key.entityType, key.entityName, accountFromJson, asOf);
+        log.Information("[INBOUND BEFORE] Intraday → entity={EntityType}/{EntityName}, account={Account}, as_of={AsOf}",
+               key.entityType, key.entityName, accountFromJson, asOf);
 
         await using (var writer = await conn.BeginBinaryImportAsync(copySql, ct))
         {
@@ -208,11 +207,12 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
             await writer.CompleteAsync(ct);
         }
 
-        _log.Information("[INBOUND AFTER] Intraday persisted → entity={EntityType}/{EntityName}, account={Account}, as_of={AsOf}",
-                         key.entityType, key.entityName, accountFromJson, asOf);
+        log.Information("[INBOUND AFTER] Intraday persisted → entity={EntityType}/{EntityName}, account={Account}, as_of={AsOf}",
+               key.entityType, key.entityName, accountFromJson, asOf);
+
     }
 
-    public async Task CallUpsertIntradayAsync(string json, SubscriptionKey key, DateOnly asOf, string msgRequestId, CancellationToken ct)
+    public async Task CallUpsertIntradayAsync(string json, SubscriptionKey key, DateOnly asOf, string msgRequestId, Serilog.ILogger log, CancellationToken ct)
     {
         var j = string.IsNullOrWhiteSpace(json) ? new JObject() : JObject.Parse(json);
         var accountFromJson = GetJsonTextOrNull(j, "ACCOUNT");
@@ -222,8 +222,8 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
 
         const string procName = "app_data.bbg_upsert_positions_from_inbound";
 
-        _log.Information("[UPSERT BEFORE] Intraday → proc={Proc}, p_is_intraday={Intraday}, p_load_process={ProcName}, p_as_of_date={AsOf}, p_account_id_intraday={Account}, p_load_bb_entity_name={EntityName}",
-                         procName, true, "playground-client", asOf, accountFromJson ?? "(null)", key.entityName);
+        log.Information("[UPSERT BEFORE] Intraday → proc={Proc}, p_is_intraday={Intraday}, p_load_process={ProcName}, p_as_of_date={AsOf}, p_account_id_intraday={Account}, p_load_bb_entity_name={EntityName}",
+               procName, true, "playground-client", asOf, accountFromJson ?? "(null)", key.entityName);
 
         await using var call = new NpgsqlCommand(
             $"CALL {procName} (@p_is_intraday, @p_load_process, @p_as_of_date, @p_account_id_intraday, @p_load_bb_entity_name)", conn);
@@ -234,7 +234,8 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
         call.Parameters.AddWithValue("p_load_bb_entity_name", key.entityName);
         await call.ExecuteNonQueryAsync(ct);
 
-        _log.Information("[UPSERT AFTER] Intraday complete → entity={EntityType}/{EntityName}, account={Account}, as_of={AsOf}",
-                         key.entityType, key.entityName, accountFromJson ?? "(null)", asOf);
+        log.Information("[UPSERT AFTER] Intraday complete → entity={EntityType}/{EntityName}, account={Account}, as_of={AsOf}",
+               key.entityType, key.entityName, accountFromJson ?? "(null)", asOf);
+
     }
 }
