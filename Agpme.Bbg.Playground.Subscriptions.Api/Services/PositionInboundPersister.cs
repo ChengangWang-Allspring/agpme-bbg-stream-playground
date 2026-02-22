@@ -77,7 +77,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
     }
 
 
-    private static object? GetLoaderValueText(SubscriptionKey key, DateOnly asOf, string colName, bool isIntraday, string? accountFromJson)
+    private static object? GetLoaderValueText(SubscriptionKey key, DateOnly asOf, string colName, bool isIntraday, string? accountFromJson, string msgRequestId)
         => colName.ToLowerInvariant() switch
         {
             "as_of_date" => asOf, // DATE type will be used when writing
@@ -86,7 +86,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
             "load_bb_action" => isIntraday ? null : "initial",
             "load_bb_uuid" => null,
             "load_process" => "playground-client",
-            "msg_request_id" => null,
+            "msg_request_id" => msgRequestId,
             "is_intraday" => isIntraday ? "true" : "false",
             "account" or "account_id" => accountFromJson,
             _ => null
@@ -103,7 +103,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
 
     // -------------------- Initial paint (batch) --------------------
 
-    public async Task PersistInitialBatchToInboundAsync(List<string> jsons, SubscriptionKey key, DateOnly asOf, CancellationToken ct)
+    public async Task PersistInitialBatchToInboundAsync(List<string> jsons, SubscriptionKey key, DateOnly asOf, string msgRequestId, CancellationToken ct)
     {
         await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -131,7 +131,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
                         if (m.SourceColumn.Equals("as_of_date", StringComparison.OrdinalIgnoreCase))
                             await writer.WriteAsync(asOf, NpgsqlDbType.Date, ct);
                         else
-                            await writer.WriteAsync(GetLoaderValueText(key, asOf, m.SourceColumn, isIntraday: false, accountFromJson), NpgsqlDbType.Text, ct);
+                            await writer.WriteAsync(GetLoaderValueText(key, asOf, m.SourceColumn, isIntraday: false, accountFromJson, msgRequestId), NpgsqlDbType.Text, ct);
                     }
                     else // json
                     {
@@ -147,7 +147,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
                          jsons.Count, key.entityType, key.entityName, asOf);
     }
 
-    public async Task CallUpsertInitialAsync(SubscriptionKey key, DateOnly asOf, CancellationToken ct)
+    public async Task CallUpsertInitialAsync(SubscriptionKey key, DateOnly asOf, string msgRequestId, CancellationToken ct)
     {
         await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -172,7 +172,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
 
     // -------------------- Intraday (one-by-one) --------------------
 
-    public async Task PersistIntradayToInboundAsync(string json, SubscriptionKey key, DateOnly asOf, CancellationToken ct)
+    public async Task PersistIntradayToInboundAsync(string json, SubscriptionKey key, DateOnly asOf, string msgRequestId, CancellationToken ct)
     {
         await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
@@ -197,7 +197,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
                     if (m.SourceColumn.Equals("as_of_date", StringComparison.OrdinalIgnoreCase))
                         await writer.WriteAsync(asOf, NpgsqlDbType.Date, ct);
                     else
-                        await writer.WriteAsync(GetLoaderValueText(key, asOf, m.SourceColumn, isIntraday: true, accountFromJson), NpgsqlDbType.Text, ct);
+                        await writer.WriteAsync(GetLoaderValueText(key, asOf, m.SourceColumn, isIntraday: true, accountFromJson, msgRequestId), NpgsqlDbType.Text, ct);
                 }
                 else // json
                 {
@@ -212,7 +212,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
                          key.entityType, key.entityName, accountFromJson, asOf);
     }
 
-    public async Task CallUpsertIntradayAsync(string json, SubscriptionKey key, DateOnly asOf, CancellationToken ct)
+    public async Task CallUpsertIntradayAsync(string json, SubscriptionKey key, DateOnly asOf, string msgRequestId, CancellationToken ct)
     {
         var j = string.IsNullOrWhiteSpace(json) ? new JObject() : JObject.Parse(json);
         var accountFromJson = GetJsonTextOrNull(j, "ACCOUNT");

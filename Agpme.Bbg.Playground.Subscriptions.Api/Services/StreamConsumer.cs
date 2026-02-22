@@ -17,7 +17,7 @@ public static class StreamConsumer
         CancellationToken ct)
     {
         var asOf = string.IsNullOrWhiteSpace(opts.AsOfDate)
-            ? DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd")
+            ? DateOnly.FromDateTime(DateTime.Now).ToString("yyyy-MM-dd")
             : opts.AsOfDate!;
         var uri = $"/trading-solutions/positions/{key.entityType}/{key.entityName}/subscriptions" +
                   $"?as_of_date={asOf}&chunk={(opts.Chunk ? "true" : "false")}";
@@ -30,6 +30,21 @@ public static class StreamConsumer
         if (res is null) return; // error path already handled/logged
 
         using var stream = await res.Content.ReadAsStreamAsync(ct);
+
+        // Mirrors the realtime poller to capture X-Request-ID (if server provided it) 
+        var msgRequestId =
+            res.Headers.TryGetValues("X-Request-ID", out var vals) ? vals.FirstOrDefault() : null;
+        if (string.IsNullOrWhiteSpace(msgRequestId))
+        {
+            // Fallback to a deterministic GUID for this run if header missing
+            msgRequestId = Guid.NewGuid().ToString("N");
+            log.Warning("No X-Request-ID header; generated local msgRequestId={MsgId}", msgRequestId);
+        }
+        else
+        {
+            log.Information("Using server-provided X-Request-ID: {MsgId}", msgRequestId);
+        }
+
 
         // --- state ---
         metrics.State = SubscriptionState.InitialPaint;
@@ -48,7 +63,7 @@ public static class StreamConsumer
                 if (metrics.State == SubscriptionState.InitialPaint && !initialPersisted)
                 {
                     var ok = await HandleFirstHeartbeatEndsInitialAsync(
-                        initialBatch, key, asOfDate, persister, metrics, log, ct);
+                        initialBatch, key, asOfDate, msgRequestId, persister, metrics, log, ct);
                     if (!ok) return; // error already logged/set
                     initialBatch.Clear();
                     initialPersisted = true;
@@ -69,7 +84,7 @@ public static class StreamConsumer
                     break;
 
                 case SubscriptionState.Intraday:
-                    if (!await HandleIntradayPayloadAsync(json, key, asOfDate, persister, metrics, log, ct))
+                    if (!await HandleIntradayPayloadAsync(json, key, asOfDate, msgRequestId!, persister, metrics, log, ct))
                         return; // error already logged/set
                     break;
 
@@ -142,6 +157,7 @@ public static class StreamConsumer
         List<string> initialBatch,
         SubscriptionKey key,
         DateOnly asOfDate,
+        string msgRequestId,
         IPositionInboundPersister persister,
         SubscriptionMetrics metrics,
         Serilog.ILogger log,
@@ -151,8 +167,10 @@ public static class StreamConsumer
         {
             log.Information("InitialPaint end marker (first {{}}) → persisting initial batch ({Count})",
                             initialBatch.Count);
-            await persister.PersistInitialBatchToInboundAsync(initialBatch, key, asOfDate, ct);
-            await persister.CallUpsertInitialAsync(key, asOfDate, ct);
+
+            await persister.PersistInitialBatchToInboundAsync(initialBatch, key, asOfDate, msgRequestId, ct);
+            await persister.CallUpsertInitialAsync(key, asOfDate, msgRequestId, ct);
+
             log.Information("InitialPaint batch persisted & upserted → {EntityType}/{EntityName}",
                             key.entityType, key.entityName);
             return true;
@@ -170,6 +188,7 @@ public static class StreamConsumer
         string json,
         SubscriptionKey key,
         DateOnly asOfDate,
+        string msgRequestId,
         IPositionInboundPersister persister,
         SubscriptionMetrics metrics,
         Serilog.ILogger log,
@@ -177,8 +196,8 @@ public static class StreamConsumer
     {
         try
         {
-            await persister.PersistIntradayToInboundAsync(json, key, asOfDate, ct);
-            await persister.CallUpsertIntradayAsync(json, key, asOfDate, ct);
+            await persister.PersistIntradayToInboundAsync(json, key, asOfDate, msgRequestId, ct);
+            await persister.CallUpsertIntradayAsync(json, key, asOfDate, msgRequestId, ct);
             metrics.IntradayObjects++;
             if (metrics.IntradayObjects % 100 == 0)
                 log.Information("Intraday received {Count} so far → {EntityType}/{EntityName}",
@@ -260,9 +279,8 @@ public static class StreamConsumer
         {
             var last = results[^1];
             var endIdx = s.LastIndexOf(last, StringComparison.Ordinal) + last.Length;
-            sb.Remove(0, endIdx);
-
-            sb.Remove(0, endIdx);
+            if (endIdx > 0 && endIdx <= sb.Length)
+                sb.Remove(0, endIdx);
         }
         return results;
     }

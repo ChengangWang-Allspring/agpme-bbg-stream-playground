@@ -18,4 +18,10 @@
     <ProjectReference Include="..\Agpme.Bbg.Playground.Shared\Agpme.Bbg.Playground.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Update="appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

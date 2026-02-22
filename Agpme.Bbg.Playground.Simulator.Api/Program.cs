@@ -4,6 +4,11 @@ using Agpme.Bbg.Playground.Simulator.Api.Endpoints;
 using Microsoft.Extensions.Logging;
 
 
+Directory.SetCurrentDirectory(AppContext.BaseDirectory);
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseContentRoot(AppContext.BaseDirectory);
+
 var configuration = new ConfigurationBuilder()
     .SetBasePath(AppContext.BaseDirectory)
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
@@ -15,24 +20,17 @@ Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(configuration)
     .CreateLogger();
 
-try
-{
-    Log.Information("Starting Stream Playground Server");
+Log.Information("Starting Stream Playground Server");
 
-    var builder = WebApplication.CreateBuilder(args);
-    builder.Services.AddStreamingServerServices(builder.Configuration);
-    builder.Host.UseSerilog(Log.Logger, dispose: true);
+builder.Host.UseSerilog(Log.Logger, dispose: true);
 
-    var app = builder.Build();
-    app.UseSerilogRequestLogging();
-    app.MapPositionsStreamEndpoints();
-    await app.RunAsync();
-}
-catch (Exception ex)
-{
-    Log.Fatal(ex, "Stream Playground Server terminated unexpectedly");
-}
-finally
-{
-    Log.CloseAndFlush();
-}
+builder.Services.AddStreamingServerServices(builder.Configuration);
+
+
+var app = builder.Build();
+app.UseSerilogRequestLogging();
+
+app.MapPositionsStreamEndpoints();
+
+await app.RunAsync();
+

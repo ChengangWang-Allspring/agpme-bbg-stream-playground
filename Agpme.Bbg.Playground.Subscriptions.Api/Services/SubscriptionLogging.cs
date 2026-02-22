@@ -7,7 +7,7 @@ public static class SubscriptionLogging
 {
     /// <summary>
     /// Creates a per-subscription logger that writes to:
-    /// Logs/subscriptions/{entityType}_{entityName}.log
+    /// {AppContext.BaseDirectory}/Logs/subscriptions/{entityType}_{entityName}.log
     /// The caller is responsible for disposing the returned logger.
     /// </summary>
     public static Serilog.ILogger CreateSubscriptionLogger(string entityType, string entityName)
@@ -21,10 +21,13 @@ public static class SubscriptionLogging
             .Replace('"', '_')
             .Replace('<', '_')
             .Replace('>', '_')
-            .Replace('|', '_');
+            .Replace('\n', '_');
 
-        var folder = Path.Combine("Logs", "subscriptions");
+        // 👇 anchor to the app's binary directory
+        var baseDir = AppContext.BaseDirectory;
+        var folder = Path.Combine(baseDir, "Logs", "subscriptions");
         Directory.CreateDirectory(folder);
+
         var filePath = Path.Combine(folder, $"{safeId}.log");
 
         var logger = new LoggerConfiguration()
@@ -37,7 +40,7 @@ public static class SubscriptionLogging
                 shared: true,
                 restrictedToMinimumLevel: LogEventLevel.Information,
                 outputTemplate:
-                    "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj} {Properties}{NewLine}{Exception}")
+                "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj} {Properties}{NewLine}{Exception}")
             .CreateLogger();
 
         return logger;

@@ -3,12 +3,24 @@ using Agpme.Bbg.Playground.Subscriptions.Api.Endpoints;
 using Agpme.Bbg.Playground.Subscriptions.Api.Services;
 using Serilog;
 
-var builder = WebApplication.CreateBuilder(args);
 
-// Serilog (existing)
-builder.Host.UseSerilog((ctx, lc) => lc
-    .ReadFrom.Configuration(ctx.Configuration)
-    .WriteTo.Console());
+Directory.SetCurrentDirectory(AppContext.BaseDirectory);
+var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseContentRoot(AppContext.BaseDirectory);
+
+var configuration = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .Build();
+
+
+Log.Logger = new LoggerConfiguration()
+    .Enrich.FromLogContext()
+    .ReadFrom.Configuration(configuration)
+    .CreateLogger();
+
+builder.Host.UseSerilog(Log.Logger, dispose: true);
+
 
 // ---- Swagger for Minimal APIs ----
 builder.Services.AddEndpointsApiExplorer();   // discover minimal APIs
@@ -34,6 +46,8 @@ builder.Services.AddSingleton<ClientApi>();
 
 var app = builder.Build();
 
+app.UseSerilogRequestLogging();
+
 // ---- Swagger middleware ----
 if (app.Environment.IsDevelopment())
 {
@@ -44,7 +58,6 @@ if (app.Environment.IsDevelopment())
 // ---- Minimal API endpoints ----
 app.MapClientEndpoints();
 
-// (No Blazor, no static files needed)
 
 // Do not autostart subscriptions (keep it disabled)
 //// _ = Task.Run(async () => { ... });

@@ -22,6 +22,10 @@ public static class PositionsStreamEndpoints
 
                 var asOf = as_of_date ?? DateOnly.FromDateTime(DateTime.UtcNow);
 
+                // Generate a stable request id for this subscription (client will persist it)
+                var msgRequestId = Guid.NewGuid().ToString("N");
+                http.Response.Headers["X-Request-ID"] = msgRequestId;
+
                 http.Response.StatusCode = 200;
                 http.Response.Headers.CacheControl = "no-store";
                 http.Response.ContentType = "application/json; charset=utf-8";

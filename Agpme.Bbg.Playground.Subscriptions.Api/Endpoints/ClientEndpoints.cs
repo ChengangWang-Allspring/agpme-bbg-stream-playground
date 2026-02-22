@@ -58,6 +58,16 @@ public static class ClientEndpoints
             .WithDescription("Use yyyy-MM-dd or empty/null for today.")
             .WithOpenApi();
 
+        settings.MapGet("as-of-date",
+            (Microsoft.Extensions.Options.IOptions<PlaygroundClientOptions> opts) =>
+            {
+                var asOf = opts.Value.AsOfDate;
+                return Results.Ok(new { as_of_date = asOf });
+            })
+            .WithSummary("Get current as_of_date")
+            .WithDescription("Returns the configured as_of_date (null means today).")
+            .WithOpenApi();
+
         // Config
         app.MapGet("/client/config/targets",
             (Microsoft.Extensions.Options.IOptions<PlaygroundClientOptions> opts)
