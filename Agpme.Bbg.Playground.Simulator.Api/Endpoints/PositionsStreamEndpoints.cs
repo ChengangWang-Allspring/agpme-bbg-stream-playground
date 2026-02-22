@@ -25,6 +25,8 @@ public static class PositionsStreamEndpoints
                 // Generate a stable request id for this subscription (client will persist it)
                 var msgRequestId = Guid.NewGuid().ToString("N");
                 http.Response.Headers["X-Request-ID"] = msgRequestId;
+                http.Items["msg_request_id"] = msgRequestId; //stash in HttpContext to be used for log message
+
 
                 http.Response.StatusCode = 200;
                 http.Response.Headers.CacheControl = "no-store";

@@ -59,11 +59,14 @@ public static class StreamConsumer
 
             if (IsHeartbeat(json))
             {
+                // Friendly heartbeat message for Playground testing
+                log.Information("Heartbeat {{}} received ← {EntityType}/{EntityName}", key.entityType, key.entityName);
+
                 // FIRST {} ends initial paint (client rule)
                 if (metrics.State == SubscriptionState.InitialPaint && !initialPersisted)
                 {
                     var ok = await HandleFirstHeartbeatEndsInitialAsync(
-                        initialBatch, key, asOfDate, msgRequestId, persister, metrics, log, ct);
+                        initialBatch, key, asOfDate, msgRequestId!, persister, metrics, log, ct);
                     if (!ok) return; // error already logged/set
                     initialBatch.Clear();
                     initialPersisted = true;
