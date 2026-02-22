@@ -1,0 +1,43 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="appsettings.json" />
+    <None Remove="db\DBScripts\001_schemas.sql" />
+    <None Remove="db\DBScripts\002_procedure_runstats.sql" />
+    <None Remove="db\DBScripts\003_bbg_poller_tables.sql" />
+    <None Remove="db\DBScripts\004_bbg_poller_functions.sql" />
+    <None Remove="db\DBScripts\005_bbg_poller_procedures.sql" />
+    <None Remove="Docker\docker-compose.local.yml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="db\DBScripts\*.sql">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Docker\docker-compose.local.yml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
+    <PackageReference Include="Npgsql" Version="9.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Agpme.Bbg.Stream.Playground.Shared\Agpme.Bbg.Stream.Playground.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

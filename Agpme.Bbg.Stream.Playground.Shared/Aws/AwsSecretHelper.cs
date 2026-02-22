@@ -5,7 +5,7 @@ using Amazon.Runtime.CredentialManagement;
 using Amazon.SecretsManager;
 using Amazon.SecretsManager.Model;
 
-namespace Agpme.Bbg.Stream.Playground.Shared.Helpers;
+namespace Agpme.Bbg.Stream.Playground.Shared.Aws;
 
 /// <summary>
 /// Minimal helper to read a specific key from an AWS Secrets Manager secret,
