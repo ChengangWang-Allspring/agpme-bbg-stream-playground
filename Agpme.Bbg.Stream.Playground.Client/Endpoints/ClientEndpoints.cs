@@ -1,4 +1,5 @@
-﻿using Agpme.Bbg.Stream.Playground.Client.Models;
+﻿using Agpme.Bbg.Stream.Playground.Client.Configuration;
+using Agpme.Bbg.Stream.Playground.Client.Models;
 using Agpme.Bbg.Stream.Playground.Client.Services;
 
 namespace Agpme.Bbg.Stream.Playground.Client.Endpoints;
@@ -29,8 +30,22 @@ public static class ClientEndpoints
                 return Results.Accepted();
             });
 
+        app.MapPost("/client/settings/as-of-date", (Microsoft.Extensions.Options.IOptions<PlaygroundClientOptions> opts,
+                                                   [AsParameters] AsOfDto dto) =>
+        {
+            // mutate in-memory options for new streams
+            var o = opts.Value;
+            o.AsOfDate = string.IsNullOrWhiteSpace(dto.as_of_date) ? null : dto.as_of_date;
+            return Results.Ok(new { as_of_date = o.AsOfDate });
+        });
+
+        app.MapGet("/client/config/targets", (Microsoft.Extensions.Options.IOptions<PlaygroundClientOptions> opts) =>
+            Results.Ok(opts.Value.Targets));
+
         app.MapGet("/client/health", () => Results.Ok(new { status = "ok" }));
 
         return app;
     }
+
+    public record AsOfDto(string? as_of_date);
 }

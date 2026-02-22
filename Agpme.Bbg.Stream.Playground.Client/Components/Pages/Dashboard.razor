@@ -1,0 +1,120 @@
+﻿@page "/"
+@inject ClientApi Api
+@inject Microsoft.Extensions.Options.IOptions<PlaygroundClientOptions> Opts
+@inject NavigationManager Nav
+@using Agpme.Bbg.Stream.Playground.Client.Configuration
+
+<MudPaper Elevation="1" Class="pa-4 mb-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudText Typo="Typo.h5"><MudIcon Icon="@Icons.Material.Filled.Dashboard" Class="mr-2"/>Stream Client Dashboard</MudText>
+        <MudSpacer />
+        <MudTextField @bind-Value="_asOf" Label="as_of_date (yyyy-MM-dd or empty)" Variant="Variant.Outlined" Style="width: 260px;" />
+        <MudButton StartIcon="@Icons.Material.Filled.DateRange" Color="Color.Primary" Variant="Variant.Filled" OnClick="SetAsOfAsync">
+            Apply
+        </MudButton>
+        <MudDivider Vertical="true" Class="mx-2"/>
+        <MudButton StartIcon="@Icons.Material.Filled.PlayArrow" Color="Color.Success" Variant="Variant.Outlined" OnClick="StartAllAsync">
+            Start All
+        </MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.Refresh" Color="Color.Info" Variant="Variant.Outlined" OnClick="ReloadAsync">
+            Refresh
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+<MudPaper Elevation="1" Class="pa-4">
+    <MudTable Items="_rows" Dense="true" Hover="true" Bordered="true" Striped="true">
+        <HeaderContent>
+            <MudTh>Entity Type</MudTh>
+            <MudTh>Entity Name</MudTh>
+            <MudTh>State</MudTh>
+            <MudTh>Initial</MudTh>
+            <MudTh>Intraday</MudTh>
+            <MudTh>Heartbeats</MudTh>
+            <MudTh>Last Message</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Type">@context.Key.entityType</MudTd>
+            <MudTd DataLabel="Name">@context.Key.entityName</MudTd>
+            <MudTd DataLabel="State">
+                <MudChip T="string" Color="@StateColor(context.Metrics.State)" Variant="Variant.Filled" Size="Size.Small">
+                    @context.Metrics.State
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Initial">@context.Metrics.InitialPaintObjects</MudTd>
+            <MudTd DataLabel="Intraday">@context.Metrics.IntradayObjects</MudTd>
+            <MudTd DataLabel="Heartbeats">@context.Metrics.Heartbeats</MudTd>
+            <MudTd DataLabel="LastMessage">@context.Metrics.LastMessageAt?.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss")</MudTd>
+            <MudTd>
+                <MudStack Row="true" Spacing="1">
+                    <MudButton Color="Color.Success" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.PlayArrow"
+                               OnClick="() => StartAsync(context.Key.entityType, context.Key.entityName)">
+                        Start
+                    </MudButton>
+                    <MudButton Color="Color.Error" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Stop"
+                               OnClick="() => StopAsync(context.Key.entityType, context.Key.entityName)">
+                        Stop
+                    </MudButton>
+                </MudStack>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>No running subscriptions.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private List<SubscriptionStatus> _rows = new();
+    private string? _asOf;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Use the app's base URI to ensure the HttpClient hits same site if BaseAddress isn't set.
+        // (We created Api with factory CreateClient(); NavigationManager ensures correct host.)
+        await ReloadAsync();
+        _asOf = Opts.Value.AsOfDate;
+    }
+
+    private async Task ReloadAsync()
+    {
+        _rows = await Api.GetSubscriptionsAsync(CancellationToken.None);
+        StateHasChanged();
+    }
+
+    private async Task StartAsync(string type, string name)
+    {
+        await Api.StartAsync(type, name, CancellationToken.None);
+        await ReloadAsync();
+    }
+
+    private async Task StopAsync(string type, string name)
+    {
+        await Api.StopAsync(type, name, CancellationToken.None);
+        await ReloadAsync();
+    }
+
+    private async Task StartAllAsync()
+    {
+        await Api.StartAllAsync(CancellationToken.None);
+        await ReloadAsync();
+    }
+
+    private async Task SetAsOfAsync()
+    {
+        var applied = await Api.SetAsOfDateAsync(string.IsNullOrWhiteSpace(_asOf) ? null : _asOf, CancellationToken.None);
+        _asOf = applied;
+        // Optionally show a snackbar if you add one later
+        await ReloadAsync();
+    }
+
+    private Color StateColor(SubscriptionState state) => state switch
+    {
+        SubscriptionState.InitialPaint => Color.Warning,
+        SubscriptionState.Intraday    => Color.Info,
+        SubscriptionState.Starting     => Color.Secondary,
+        SubscriptionState.Error        => Color.Error,
+        _                              => Color.Default
+    };
+}
