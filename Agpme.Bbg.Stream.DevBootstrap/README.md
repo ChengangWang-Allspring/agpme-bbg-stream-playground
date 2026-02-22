@@ -25,7 +25,7 @@ Only **one configuration file** is used.
 Key sections:
 
 ```jsonc
-"LocalDb": {
+"LocalPlaygroundDb": {
   "ConnectionString": "Host=localhost;Port=6433;Database=agpme_playground;Username=postgres;Password=postgres"
 },
 

@@ -11,76 +11,52 @@ public static class Bootstrap
         var compose = cfg["Docker:ComposeFile"]!;
         RunDockerCompose(["compose", "-f", compose, "up", "-d"]);
 
-        // Sanity probe (match your fixture’s intent: open connection + quick query)
-        var cs = cfg["LocalDb:ConnectionString"]!;
-        Console.WriteLine($"[INFO] LocalDb.ConnectionString = {cs}");
+        var cs = cfg["LocalPlaygroundDb:ConnectionString"]!;
+        Console.WriteLine($"[INFO] Waiting for Postgres at {cs}");
+
         await WaitForDbAsync(cs, TimeSpan.FromMinutes(2));
         await PrintServerIdentityAsync(cs);
+
         Console.WriteLine("[OK] Postgres is ready.");
     }
 
     public static Task ApplySqlAsync(IConfiguration cfg)
     {
-        var cs = cfg["LocalDb:ConnectionString"]!;
+        var cs = cfg["LocalPlaygroundDb:ConnectionString"]!;
         var folder = cfg["DbScripts:Folder"]!;
         return SqlScriptsApplier.ApplyAsync(cs, folder, Console.WriteLine);
     }
 
-
     public static async Task SyncMetadataAsync(IConfiguration cfg)
     {
-        // Enabled?
-        if (!(bool.TryParse(cfg["MetadataSync:Enabled"], out var enabled) && enabled))
+        // Strictly use MetadataSync keys
+        var enabled = bool.Parse(cfg["MetadataSync:Enabled"]!);
+        if (!enabled)
         {
             Console.WriteLine("[Skip] MetadataSync.Enabled=false");
             return;
         }
 
-        // Destination CS (local)
-        var destCs = cfg["LocalDb:ConnectionString"]
-                     ?? throw new InvalidOperationException("LocalDb:ConnectionString is not set.");
+        var destCs = cfg["LocalPlaygroundDb:ConnectionString"]!;
+        var truncate = bool.Parse(cfg["MetadataSync:TruncateBeforeCopy"]!);
 
-        // Tables (NO Binder): GetChildren → Select → ToArray
         var tables = cfg.GetSection("MetadataSync:Tables")
                         .GetChildren()
-                        .Select(s => s.Value)
-                        .Where(v => !string.IsNullOrWhiteSpace(v))
+                        .Select(s => s.Value!)
                         .ToArray();
 
-        if (tables.Length == 0)
-            throw new InvalidOperationException("MetadataSync:Tables is empty.");
+        Console.WriteLine("[INFO] Syncing metadata tables:");
+        foreach (var t in tables) Console.WriteLine($"  - {t}");
 
-        var truncate = bool.TryParse(cfg["MetadataSync:TruncateBeforeCopy"], out var t) && t;
+        // Always use AWS secrets from MetadataAwsSecrets
+        var arn = cfg["MetadataAwsSecrets:Arn"]!;
+        var keyName = cfg["MetadataAwsSecrets:KeyName"]!;
+        var region = cfg["MetadataAwsSecrets:Region"]!;
+        var profile = cfg["MetadataAwsSecrets:Profile"]!;
 
-        // Source connection string: either use AWS Secret or a direct value
-        string sourceCs;
+        Console.WriteLine($"[INFO] Retrieving source connection from AWS Secret: {arn}");
+        var sourceCs = await AwsSecretHelper.GetSecretValueByKeyAsync(profile, arn, keyName, region);
 
-        // Preferred: UseAwsSecret block moved to ROOT under "MetadataAwsSecrets"
-        var useSecret = bool.TryParse(cfg["MetadataAwsSecrets:UseAwsSecret"], out var us) && us;
-
-        if (useSecret)
-        {
-            var arn = cfg["MetadataAwsSecrets:Arn"];
-            var keyName = cfg["MetadataAwsSecrets:KeyName"];
-            var region = cfg["MetadataAwsSecrets:Region"];
-            // Optional; defaults via ResolveProfileForEnv if you want
-            var profile = cfg["MetadataAwsSecrets:Profile"];
-
-            if (string.IsNullOrWhiteSpace(arn) || string.IsNullOrWhiteSpace(keyName))
-                throw new InvalidOperationException("MetadataAwsSecrets.Arn/KeyName must be configured.");
-
-            // Use the Shared helper you already have
-            sourceCs = await AwsSecretHelper.GetSecretValueByKeyAsync(
-                profile, arn!, keyName!, region);
-        }
-        else
-        {
-            sourceCs = cfg["MetadataSourceConnectionString"]
-                       ?? throw new InvalidOperationException(
-                            "MetadataSourceConnectionString is not set and UseAwsSecret=false.");
-        }
-
-        // Copy small metadata tables from source (DEV) → local
         await PostgresSyncHelper.CopyTablesAsync(sourceCs, destCs, tables, truncate);
         Console.WriteLine("[OK] Metadata synchronized.");
     }
@@ -93,24 +69,27 @@ public static class Bootstrap
             : new[] { "compose", "-f", compose, "down" };
 
         RunDockerCompose(args);
-        await Task.Delay(500);
+        await Task.Delay(300);
         Console.WriteLine("[OK] Docker compose down.");
     }
 
-    // ---- helpers (close to your fixture’s sanity probe) ----
+    // --------------------------------------------------------------------
+    // Helpers (no optional config usage here either)
+    // --------------------------------------------------------------------
+
     private static async Task PrintServerIdentityAsync(string cs, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync(ct);
 
         const string sql = """
-        SELECT current_database(),
-               current_user,
-               inet_server_addr()::text,
-               inet_server_port(),
-               current_setting('server_version'),
-               current_setting('search_path')
-    """;
+            SELECT current_database(),
+                   current_user,
+                   inet_server_addr()::text,
+                   inet_server_port(),
+                   current_setting('server_version'),
+                   current_setting('search_path')
+        """;
 
         await using var cmd = new NpgsqlCommand(sql, conn);
         await using var rdr = await cmd.ExecuteReaderAsync(ct);
@@ -127,7 +106,7 @@ public static class Bootstrap
             Console.WriteLine($"DB          : {db}");
             Console.WriteLine($"User        : {user}");
             Console.WriteLine($"Server (ip) : {ip}");
-            Console.WriteLine($"Server port : {port}");
+            Console.WriteLine($"Port        : {port}");
             Console.WriteLine($"Version     : {version}");
             Console.WriteLine($"Search path : {searchPath}");
         }
@@ -135,9 +114,11 @@ public static class Bootstrap
 
     private static void RunDockerCompose(string[] args)
     {
-        // Prefer `docker compose`, fallback to legacy `docker-compose`
-        var ok = TryRun("docker", args) || TryRun("docker-compose", args.Skip(1).ToArray());
-        if (!ok) throw new InvalidOperationException("Failed to execute docker compose.");
+        var ok = TryRun("docker", args)
+              || TryRun("docker-compose", args.Skip(1).ToArray());
+
+        if (!ok)
+            throw new InvalidOperationException("Failed to execute docker compose.");
     }
 
     private static bool TryRun(string file, string[] args)
@@ -149,41 +130,51 @@ public static class Bootstrap
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             };
+
             using var p = Process.Start(psi)!;
             p.WaitForExit();
-            var stdout = p.StandardOutput.ReadToEnd();
-            var stderr = p.StandardError.ReadToEnd();
-            if (!string.IsNullOrWhiteSpace(stdout)) Console.WriteLine(stdout);
-            if (!string.IsNullOrWhiteSpace(stderr)) Console.WriteLine(stderr);
+
+            Console.Write(p.StandardOutput.ReadToEnd());
+            Console.Write(p.StandardError.ReadToEnd());
+
             return p.ExitCode == 0;
         }
-        catch { return false; }
+        catch
+        {
+            return false;
+        }
     }
 
     private static async Task WaitForDbAsync(string cs, TimeSpan timeout)
     {
         var sw = Stopwatch.StartNew();
         Exception? last = null;
-        int attempt = 0;
+        var attempt = 0;
+
         while (sw.Elapsed < timeout)
         {
             try
             {
+                attempt++;
+
                 await using var conn = new NpgsqlConnection(cs);
                 await conn.OpenAsync();
+
                 await using var cmd = new NpgsqlCommand("select 1", conn);
                 await cmd.ExecuteScalarAsync();
-                Console.WriteLine("[INFO] DB connection established.");
+
+                Console.WriteLine("[INFO] Database connection succeeded.");
                 return;
             }
             catch (Exception ex)
             {
                 last = ex;
-                attempt++;
-                Console.WriteLine($"[WAIT] DB not ready (attempt {attempt}) : {ex.Message}");
+                Console.WriteLine($"[WAIT] Database not ready (attempt {attempt}): {ex.Message}");
                 await Task.Delay(1500);
             }
         }
-        throw new TimeoutException($"DB not ready within {timeout}. Last error: {last?.Message}");
+
+        throw new TimeoutException(
+            $"Database was not ready within {timeout}. Last error: {last?.Message}");
     }
 }
