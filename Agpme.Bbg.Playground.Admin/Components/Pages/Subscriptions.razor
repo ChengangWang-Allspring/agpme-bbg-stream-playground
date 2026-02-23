@@ -1,0 +1,77 @@
+﻿@page "/subscriptions"
+@using Agpme.Bbg.Playground.Admin.Services
+@inject SubscriptionsClient Api
+@inject ISnackbar Snackbar
+@using MudBlazor
+
+<PageTitle>Subscriptions</PageTitle>
+
+<MudPaper Class="pa-4">
+    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+        <MudText Typo="Typo.h5">Running Subscriptions</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="StartAll">Start All</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="Reload">Refresh</MudButton>
+    </MudStack>
+
+    <MudTable Items="_items" Hover="true" Dense="true" Class="mt-4">
+        <HeaderContent>
+            <MudTh>Entity</MudTh>
+            <MudTh>State</MudTh>
+            <MudTh>Last Message</MudTh>
+            <MudTh>Heartbeats</MudTh>
+            <MudTh>Intraday</MudTh>
+            <MudTh>Initial</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@($"{context.Key.entityType}/{context.Key.entityName}")</MudTd>
+            <MudTd>@(StateLabel(context.Metrics.State))</MudTd>
+            <MudTd>@(context.Metrics.LastMessageAt?.ToLocalTime().ToString("HH:mm:ss") ?? "-")</MudTd>
+            <MudTd>@context.Metrics.Heartbeats</MudTd>
+            <MudTd>@context.Metrics.IntradayObjects</MudTd>
+            <MudTd>@context.Metrics.InitialPaintObjects</MudTd>
+            <MudTd>
+                <MudButton Size="Size.Small" Color="Color.Error" OnClick="@(()=> Stop(context.Key))">Stop</MudButton>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>No running subscriptions.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private List<SubscriptionsClient.SubscriptionStatus> _items = new();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load(CancellationToken ct = default)
+        => _items = await Api.ListAsync(ct);
+
+    private async Task Reload() => await Load();
+
+    private async Task StartAll()
+    {
+        await Api.StartAllAsync();
+        await Load();
+        Snackbar.Add("Start-all dispatched.", Severity.Success);
+    }
+
+    private async Task Stop(SubscriptionsClient.SubscriptionKey key)
+    {
+        var ok = await Api.StopAsync(key);
+        await Load();
+        Snackbar.Add(ok ? "Stopped." : "Not running.", ok ? Severity.Info : Severity.Warning);
+    }
+
+    private static string StateLabel(int state) => state switch
+    {
+        0 => "Starting",
+        1 => "InitialPaint",
+        2 => "Intraday",
+        3 => "Stopped",
+        4 => "Error",
+        _ => $"Unknown({state})"
+    };
+}

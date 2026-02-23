@@ -1,0 +1,33 @@
+﻿@using MudBlazor
+
+<MudNavMenu>
+
+    <!-- Home -->
+    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">
+        Home
+    </MudNavLink>
+
+    <MudDivider Class="my-2" />
+
+    <!-- Subscriptions -->
+    <MudNavLink Href="subscriptions"
+                Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Filled.Stream">
+        Subscriptions
+    </MudNavLink>
+
+    <!-- Targets -->
+    <MudNavLink Href="targets"
+                Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Filled.PlaylistAdd">
+        Targets
+    </MudNavLink>
+
+    <!-- Settings -->
+    <MudNavLink Href="settings"
+                Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Filled.Settings">
+        Settings
+    </MudNavLink>
+
+</MudNavMenu>

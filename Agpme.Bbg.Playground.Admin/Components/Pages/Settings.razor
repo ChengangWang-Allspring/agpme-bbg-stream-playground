@@ -1,0 +1,33 @@
+﻿@page "/settings"
+@using Agpme.Bbg.Playground.Admin.Services
+@inject SubscriptionsClient Api
+@inject ISnackbar Snackbar
+@using MudBlazor
+
+<PageTitle>Settings</PageTitle>
+
+<MudPaper Class="pa-4">
+    <MudText Typo="Typo.h5">Client Settings</MudText>
+
+    <MudForm Class="mt-4">
+        <MudTextField Label="as_of_date (yyyy-MM-dd)" @bind-Value="_asOf" Placeholder="empty = today" />
+        <MudStack Row Spacing="2" Class="mt-2">
+            <MudButton Color="Color.Primary" OnClick="Save">Save</MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="Reload">Reload</MudButton>
+        </MudStack>
+    </MudForm>
+</MudPaper>
+
+@code {
+    private string? _asOf;
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload() => _asOf = await Api.GetAsOfDateAsync();
+
+    private async Task Save()
+    {
+        await Api.SetAsOfDateAsync(string.IsNullOrWhiteSpace(_asOf) ? null : _asOf!.Trim());
+        Snackbar.Add("Saved.", Severity.Success);
+    }
+}
