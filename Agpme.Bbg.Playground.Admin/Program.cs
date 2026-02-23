@@ -1,5 +1,6 @@
 using Agpme.Bbg.Playground.Admin.Components;
 using MudBlazor.Services;
+using Agpme.Bbg.Playground.Admin.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,9 +16,8 @@ builder.Services.AddHttpClient("subsapi", http =>
     http.Timeout = Timeout.InfiniteTimeSpan;
 });
 
-// Register your typed API client
-builder.Services.AddSingleton<Agpme.Bbg.Playground.Admin.Services.SubscriptionsClient>();
-
+// Register your typed services
+builder.Services.AddSingleton<SubscriptionsClient>();
 
 // Add services to the container.
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
