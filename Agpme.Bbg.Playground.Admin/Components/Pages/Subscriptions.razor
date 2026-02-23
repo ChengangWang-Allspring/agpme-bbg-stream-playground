@@ -7,71 +7,193 @@
 <PageTitle>Subscriptions</PageTitle>
 
 <MudPaper Class="pa-4">
+
+    <!-- Header: Title + As-Of Date controls -->
     <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-        <MudText Typo="Typo.h5">Running Subscriptions</MudText>
+        <MudText Typo="Typo.h5">Subscriptions</MudText>
         <MudSpacer />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="StartAll">Start All</MudButton>
-        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="Reload">Refresh</MudButton>
+
+        <!-- As-Of Date Picker + Apply -->
+        <!-- NOTE: Use DateTime? for MudBlazor 7.x -->
+        <MudDatePicker T="DateTime?" @bind-Date="_pickAsOf"
+                       DateFormat="yyyy-MM-dd"
+                       Label="as_of_date"
+                       DisableToolbar="true"
+                       Variant="Variant.Outlined"
+                       Class="mr-2"
+                       Clearable="true"
+                       Placeholder="empty = today" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyAsOfAsync">Apply</MudButton>
+        <MudText Class="ml-3" Typo="Typo.caption">
+            Current as_of_date: @(_asOfLabel ?? "(today)")
+        </MudText>
+
+        <!-- Refresh All -->
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="Reload" Class="ml-4">Refresh</MudButton>
+
+        <!-- Start All (uses configured targets) -->
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="StartAll" Class="ml-2">Start All</MudButton>
     </MudStack>
 
-    <MudTable Items="_items" Hover="true" Dense="true" Class="mt-4">
+    <!-- Unified table -->
+    <MudTable Items="_rows" Hover="true" Dense="true" Class="mt-4">
         <HeaderContent>
             <MudTh>Entity</MudTh>
-            <MudTh>State</MudTh>
+            <MudTh>Status</MudTh>
             <MudTh>Last Message</MudTh>
             <MudTh>Heartbeats</MudTh>
             <MudTh>Intraday</MudTh>
             <MudTh>Initial</MudTh>
-            <MudTh>Actions</MudTh>
+            <MudTh>Action</MudTh>
         </HeaderContent>
+
         <RowTemplate>
-            <MudTd>@($"{context.Key.entityType}/{context.Key.entityName}")</MudTd>
-            <MudTd>@(StateLabel(context.Metrics.State))</MudTd>
-            <MudTd>@(context.Metrics.LastMessageAt?.ToLocalTime().ToString("HH:mm:ss") ?? "-")</MudTd>
-            <MudTd>@context.Metrics.Heartbeats</MudTd>
-            <MudTd>@context.Metrics.IntradayObjects</MudTd>
-            <MudTd>@context.Metrics.InitialPaintObjects</MudTd>
+            <MudTd>@($"{context.EntityType}/{context.EntityName}")</MudTd>
             <MudTd>
-                <MudButton Size="Size.Small" Color="Color.Error" OnClick="@(()=> Stop(context.Key))">Stop</MudButton>
+                @if (context.Started)
+                {
+                    <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.PlayArrow">Started</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Color="Color.Default" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Stop">Stopped</MudChip>
+                }
+            </MudTd>
+            <MudTd>@(context.LastMessageLocal ?? "-")</MudTd>
+            <MudTd>@context.Heartbeats</MudTd>
+            <MudTd>@context.Intraday</MudTd>
+            <MudTd>@context.Initial</MudTd>
+            <MudTd>
+                @if (context.Started)
+                {
+                    <MudButton Size="Size.Small" Color="Color.Error" OnClick="@(() => Stop(new(context.EntityType, context.EntityName)))">
+                        Stop
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Size="Size.Small" Color="Color.Primary" OnClick="@(() => Start(new(context.EntityType, context.EntityName)))">
+                        Start
+                    </MudButton>
+                }
             </MudTd>
         </RowTemplate>
+
         <NoRecordsContent>
-            <MudText>No running subscriptions.</MudText>
+            <MudText>No subscriptions or targets found.</MudText>
         </NoRecordsContent>
     </MudTable>
 </MudPaper>
 
 @code {
-    private List<SubscriptionsClient.SubscriptionStatus> _items = new();
+    // ---------------- Page model ----------------
+    private sealed record RowVm(
+        string EntityType,
+        string EntityName,
+        bool Started,
+        string? LastMessageLocal,
+        int Heartbeats,
+        int Intraday,
+        int Initial
+    );
 
-    protected override async Task OnInitializedAsync() => await Load();
+    private List<RowVm> _rows = new();
+    private DateTime? _pickAsOf;          // <-- DateTime? for the picker (null => today)
+    private string? _asOfLabel;           // what API currently holds (or null => today)
 
-    private async Task Load(CancellationToken ct = default)
-        => _items = await Api.ListAsync(ct);
+    // ---------------- Life cycle ----------------
+    protected override async Task OnInitializedAsync()
+        => await Reload();
 
-    private async Task Reload() => await Load();
-
-    private async Task StartAll()
+    private async Task Reload()
     {
-        await Api.StartAllAsync();
-        await Load();
-        Snackbar.Add("Start-all dispatched.", Severity.Success);
+        // Pull current as_of_date label
+        _asOfLabel = await Api.GetAsOfDateAsync();
+
+        // Running subscriptions
+        var running = await Api.ListAsync();
+
+        // Configured targets
+        var targets = await Api.GetTargetsAsync() ?? new();
+
+        // Index running by key (entityType/entityName)
+        var runningMap = running.ToDictionary(
+            r => (r.Key.entityType, r.Key.entityName),
+            r => r);
+
+        // 1) Emit all running as Started
+        var rows = new List<RowVm>(runningMap.Count + targets.Count);
+        foreach (var r in running)
+        {
+            rows.Add(new RowVm(
+                r.Key.entityType,
+                r.Key.entityName,
+                Started: true,
+                LastMessageLocal: r.Metrics.LastMessageAt?.ToLocalTime().ToString("HH:mm:ss"),
+                Heartbeats: r.Metrics.Heartbeats,
+                Intraday: r.Metrics.IntradayObjects,
+                Initial: r.Metrics.InitialPaintObjects
+            ));
+        }
+
+        // 2) Emit any configured target not in running => Stopped
+        foreach (var t in targets)
+        {
+            if (!runningMap.ContainsKey((t.entityType, t.entityName)))
+            {
+                rows.Add(new RowVm(
+                    t.entityType,
+                    t.entityName,
+                    Started: false,
+                    LastMessageLocal: null,
+                    Heartbeats: 0,
+                    Intraday: 0,
+                    Initial: 0
+                ));
+            }
+        }
+
+        // (Optional) sort by status then name
+        _rows = rows
+            .OrderByDescending(r => r.Started) // Started first
+            .ThenBy(r => r.EntityType)
+            .ThenBy(r => r.EntityName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    // ---------------- Actions ----------------
+    private async Task Start(SubscriptionsClient.SubscriptionKey key)
+    {
+        var res = await Api.StartAsync(key);
+        if (res is not null)
+            Snackbar.Add($"Start requested for {key.entityType}/{key.entityName}.", Severity.Success);
+        await Reload();
     }
 
     private async Task Stop(SubscriptionsClient.SubscriptionKey key)
     {
         var ok = await Api.StopAsync(key);
-        await Load();
         Snackbar.Add(ok ? "Stopped." : "Not running.", ok ? Severity.Info : Severity.Warning);
+        await Reload();
     }
 
-    private static string StateLabel(int state) => state switch
+    private async Task StartAll()
     {
-        0 => "Starting",
-        1 => "InitialPaint",
-        2 => "Intraday",
-        3 => "Stopped",
-        4 => "Error",
-        _ => $"Unknown({state})"
-    };
+        await Api.StartAllAsync();
+        Snackbar.Add("Start-all dispatched.", Severity.Success);
+        await Reload();
+    }
+
+    // Apply As-Of date: post yyyy-MM-dd or null to use "today"
+    private async Task ApplyAsOfAsync()
+    {
+        // Convert DateTime? from picker to yyyy-MM-dd for API
+        string? newVal = _pickAsOf.HasValue
+            ? DateOnly.FromDateTime(_pickAsOf.Value.Date).ToString("yyyy-MM-dd")
+            : null;
+
+        var saved = await Api.SetAsOfDateAsync(newVal);
+        _asOfLabel = saved; // show what the API accepted (null => today)
+        Snackbar.Add($"as_of_date set to {(saved ?? "(today)")}.", Severity.Success);
+    }
 }

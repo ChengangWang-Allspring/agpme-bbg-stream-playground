@@ -1,4 +1,6 @@
-﻿using System.Net.Http.Headers;
+﻿using Newtonsoft.Json.Linq;
+using System.Globalization;
+using System.Net.Http.Headers;
 using System.Text;
 using Agpme.Bbg.Playground.Subscriptions.Api.Configuration;
 using Agpme.Bbg.Playground.Subscriptions.Api.Models;
@@ -110,6 +112,37 @@ public static class StreamConsumer
     private static bool IsHeartbeat(string json)
         => json.Length <= 2 && json.Trim() == "{}";
 
+    private static bool ShouldExcludePositionJson(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return true; // defensive; heartbeats ({}) are handled elsewhere
+        try
+        {
+            var j = JObject.Parse(json);
+
+            // Consider missing or null as "exclude"
+            if (!j.TryGetValue("POSITION_WITHOUT_PENDING", out var tok) || tok.Type == JTokenType.Null)
+                return true;
+
+            // Numeric tokens
+            if (tok.Type == JTokenType.Integer || tok.Type == JTokenType.Float)
+                return tok.Value<decimal>() == 0m;
+
+            // String tokens (trim + invariant parse)
+            var s = tok.Type == JTokenType.String ? tok.Value<string>() : tok.ToString();
+            if (string.IsNullOrWhiteSpace(s)) return true;
+            if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var d))
+                return d == 0m;
+
+            // Unknown shape → keep (do not exclude)
+            return false;
+        }
+        catch
+        {
+            // If JSON is malformed, do not exclude here (other code paths may handle it)
+            return false;
+        }
+    }
+
     private static async Task<HttpResponseMessage?> ConnectForStreamingAsync(
         HttpClient http, string uri, SubscriptionKey key, SubscriptionMetrics metrics, Serilog.ILogger log, CancellationToken ct)
     {
@@ -150,6 +183,13 @@ public static class StreamConsumer
 
     private static void BufferInitialPayload(List<string> initialBatch, string json, SubscriptionMetrics metrics, Serilog.ILogger log)
     {
+
+        if (ShouldExcludePositionJson(json))
+        {
+            log.Information("Filtered out InitialPaint row with zero/null POSITION_WITHOUT_PENDING");
+            return;
+        }
+
         initialBatch.Add(json);         
         metrics.InitialPaintObjects++;
         if (metrics.InitialPaintObjects % 50 == 0)
@@ -199,6 +239,14 @@ public static class StreamConsumer
     {
         try
         {
+
+            // filter out zero/null POSITION_WITHOUT_PENDING
+            if (ShouldExcludePositionJson(json))
+            {
+                log.Information("Filtered out Intraday row with zero/null POSITION_WITHOUT_PENDING → {EntityType}/{EntityName}",
+                    key.entityType, key.entityName);
+                return true; // treated as a no-op success
+            }
 
             await persister.PersistIntradayToInboundAsync(json, key, asOfDate, msgRequestId, log, ct);
             await persister.CallUpsertIntradayAsync(json, key, asOfDate, msgRequestId, log, ct);

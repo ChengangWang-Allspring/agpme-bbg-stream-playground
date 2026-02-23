@@ -5,6 +5,7 @@ using NpgsqlTypes;
 using Serilog;
 using Agpme.Bbg.Playground.Subscriptions.Api.Models;
 using Microsoft.Extensions.Configuration;
+using System.Globalization;
 
 namespace Agpme.Bbg.Playground.Subscriptions.Api.Services;
 
@@ -238,4 +239,5 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
                key.entityType, key.entityName, accountFromJson ?? "(null)", asOf);
 
     }
+
 }
