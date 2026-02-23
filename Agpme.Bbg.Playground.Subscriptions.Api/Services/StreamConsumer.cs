@@ -239,15 +239,7 @@ public static class StreamConsumer
     {
         try
         {
-
-            // filter out zero/null POSITION_WITHOUT_PENDING
-            if (ShouldExcludePositionJson(json))
-            {
-                log.Information("Filtered out Intraday row with zero/null POSITION_WITHOUT_PENDING → {EntityType}/{EntityName}",
-                    key.entityType, key.entityName);
-                return true; // treated as a no-op success
-            }
-
+            // Important: Intraday needs to keep zero POSITION_WITHOUT_PENDING
             await persister.PersistIntradayToInboundAsync(json, key, asOfDate, msgRequestId, log, ct);
             await persister.CallUpsertIntradayAsync(json, key, asOfDate, msgRequestId, log, ct);
 

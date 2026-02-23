@@ -38,25 +38,44 @@
     <!-- Unified table -->
     <MudTable Items="_rows" Hover="true" Dense="true" Class="mt-4">
         <HeaderContent>
-            <MudTh>Entity</MudTh>
-            <MudTh>Status</MudTh>
-            <MudTh>Last Message</MudTh>
-            <MudTh>Heartbeats</MudTh>
-            <MudTh>Intraday</MudTh>
-            <MudTh>Initial</MudTh>
+            <MudTh>
+                <MudTableSortLabel T="RowVm" SortBy="@(x => x.EntityType + "/" + x.EntityName)">Entity</MudTableSortLabel>
+            </MudTh>
+            <MudTh>
+                <MudTableSortLabel T="RowVm" SortBy="@(x => x.Started)">Status</MudTableSortLabel>
+            </MudTh>
+            <MudTh>
+                <MudTableSortLabel T="RowVm" SortBy="@(x => x.LastMessageLocal)">Last Message</MudTableSortLabel>
+            </MudTh>
+            <MudTh>
+                <MudTableSortLabel T="RowVm" SortBy="@(x => x.Heartbeats)">Heartbeats</MudTableSortLabel>
+            </MudTh>
+            <MudTh>
+                <MudTableSortLabel T="RowVm" SortBy="@(x => x.Intraday)">Intraday</MudTableSortLabel>
+            </MudTh>
+            <MudTh>
+                <MudTableSortLabel T="RowVm" SortBy="@(x => x.Initial)">Initial</MudTableSortLabel>
+            </MudTh>
             <MudTh>Action</MudTh>
         </HeaderContent>
+
 
         <RowTemplate>
             <MudTd>@($"{context.EntityType}/{context.EntityName}")</MudTd>
             <MudTd>
                 @if (context.Started)
                 {
-                    <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.PlayArrow">Started</MudChip>
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                        <MudChip T="string" Color="Color.Success" Variant="Variant.Filled"
+                                 StartIcon="@Icons.Material.Filled.PlayArrow">Started</MudChip>
+                        <MudProgressCircular Indeterminate="true"
+                                             Size="Size.Small" Color="Color.Success" />
+                    </MudStack>
                 }
                 else
                 {
-                    <MudChip T="string" Color="Color.Default" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Stop">Stopped</MudChip>
+                    <MudChip T="string" Color="Color.Default" Variant="Variant.Outlined"
+                             StartIcon="@Icons.Material.Filled.Stop">Stopped</MudChip>
                 }
             </MudTd>
             <MudTd>@(context.LastMessageLocal ?? "-")</MudTd>
