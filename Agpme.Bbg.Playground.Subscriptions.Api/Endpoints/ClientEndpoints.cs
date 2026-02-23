@@ -30,8 +30,8 @@ public static class ClientEndpoints
             .WithOpenApi();
 
         subs.MapPost("stop",
-            (ISubscriptionManager mgr, SubscriptionKey key)
-                => Results.Ok(mgr.StopAsync(key)))
+            async (ISubscriptionManager mgr, SubscriptionKey key)
+                => Results.Ok(await mgr.StopAsync(key)))
             .WithSummary("Stop a subscription")
             .WithOpenApi();
 
@@ -48,10 +48,10 @@ public static class ClientEndpoints
         var settings = app.MapGroup("/client/settings").WithTags("Settings");
 
         settings.MapPost("as-of-date",
-            (Microsoft.Extensions.Options.IOptions<PlaygroundClientOptions> opts, [AsParameters] AsOfDto dto) =>
+            (Microsoft.Extensions.Options.IOptions<PlaygroundClientOptions> opts, AsOfDto dto) =>
             {
-                var o = opts.Value;
-                o.AsOfDate = string.IsNullOrWhiteSpace(dto.as_of_date) ? null : dto.as_of_date;
+            	var o = opts.Value;
+                o.AsOfDate = string.IsNullOrWhiteSpace(dto.as_of_date) ? null : dto.as_of_date.Trim();
                 return Results.Ok(new { as_of_date = o.AsOfDate });
             })
             .WithSummary("Set as_of_date for new subscriptions")
