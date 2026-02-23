@@ -12,27 +12,35 @@
     <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
         <MudText Typo="Typo.h5">Subscriptions</MudText>
         <MudSpacer />
+        <!-- As‑of group (picker + Apply kept together) -->
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+            <MudDatePicker T="DateTime?"
+                           @bind-Date="_pickAsOf"
+                           DateFormat="yyyy-MM-dd"
+                           Label="As‑of"
+                           DisableToolbar="true"
+                           Variant="Variant.Outlined"
+                           Dense="true"
+                           Clearable="true"
+                           Placeholder="empty = today"
+                           Style="width: 320px;" />    @* ⬅ widen input so it doesn't clip *@
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="ApplyAsOfAsync">
+                Apply
+            </MudButton>
 
-        <!-- As-Of Date Picker + Apply -->
-        <!-- NOTE: Use DateTime? for MudBlazor 7.x -->
-        <MudDatePicker T="DateTime?" @bind-Date="_pickAsOf"
-                       DateFormat="yyyy-MM-dd"
-                       Label="as_of_date"
-                       DisableToolbar="true"
-                       Variant="Variant.Outlined"
-                       Class="mr-2"
-                       Clearable="true"
-                       Placeholder="empty = today" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyAsOfAsync">Apply</MudButton>
-        <MudText Class="ml-3" Typo="Typo.caption">
-            Current as_of_date: @(_asOfLabel ?? "(today)")
-        </MudText>
+            <!-- Current as‑of shown as a subtle chip -->
+            <MudChip T="string" Variant="Variant.Text" Color="Color.Info" Class="ml-1">
+                as‑of: @(_asOfLabel ?? "(today)")
+            </MudChip>
+        </MudStack>
 
         <!-- Refresh All -->
         <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="Reload" Class="ml-4">Refresh</MudButton>
-
         <!-- Start All (uses configured targets) -->
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="StartAll" Class="ml-2">Start All</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="StopAll"  Class="ml-2">Stop All</MudButton>
     </MudStack>
 
     <!-- Unified table -->
@@ -201,6 +209,29 @@
         await Api.StartAllAsync();
         Snackbar.Add("Start-all dispatched.", Severity.Success);
         await Reload();
+    }
+
+    private async Task StopAll()
+    {
+        // Get the current running list
+        var running = await Api.ListAsync();
+        if (running.Count == 0)
+        {
+            Snackbar.Add("No running subscriptions.", Severity.Info);
+            return;
+        }
+
+        // Stop each running subscription
+        int stopped = 0;
+        foreach (var s in running)
+        {
+            var ok = await Api.StopAsync(new SubscriptionsClient.SubscriptionKey(
+                s.Key.entityType, s.Key.entityName));
+            if (ok) stopped++;
+        }
+
+        Snackbar.Add($"Stop-all requested: {stopped} stopped.", Severity.Success);
+        await Reload(); // refresh the table
     }
 
     // Apply As-Of date: post yyyy-MM-dd or null to use "today"
