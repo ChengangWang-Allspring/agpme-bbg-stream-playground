@@ -43,6 +43,7 @@ builder.Services.AddHttpClient("playground", (sp, http) =>
 builder.Services.AddSingleton<ISubscriptionManager, SubscriptionManager>();
 builder.Services.AddSingleton<IPositionInboundPersister, PositionInboundPersister>();
 builder.Services.AddSingleton<ClientApi>();
+builder.Services.AddSingleton<IResetService, ResetService>();
 
 var app = builder.Build();
 

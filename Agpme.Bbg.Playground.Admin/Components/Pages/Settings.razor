@@ -2,6 +2,7 @@
 @using Agpme.Bbg.Playground.Admin.Services
 @inject SubscriptionsClient Api
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @using MudBlazor
 
 <PageTitle>Settings</PageTitle>
@@ -18,6 +19,23 @@
     </MudForm>
 </MudPaper>
 
+<MudPaper Class="pa-4 mt-6">
+    <MudText Typo="Typo.h6" Color="Color.Error">Danger Zone</MudText>
+    <MudText Typo="Typo.body2" Class="mb-2">
+        Reset both <code>bbg_positions_inbound</code> and <code>bbg_positions</code> tables.
+        This action is destructive and cannot be undone.
+    </MudText>
+
+    <MudStack Row Spacing="2">
+        <MudButton Color="Color.Error"
+                   Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.DeleteForever"
+                   OnClick="ConfirmAndReset">
+            Reset inbound + positions
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
 @code {
     private string? _asOf;
 
@@ -29,5 +47,28 @@
     {
         await Api.SetAsOfDateAsync(string.IsNullOrWhiteSpace(_asOf) ? null : _asOf!.Trim());
         Snackbar.Add("Saved.", Severity.Success);
+    }
+
+    private async Task ConfirmAndReset()
+    {
+        bool? yes = await DialogService.ShowMessageBox(
+            title: "Confirm reset",
+            markupMessage: (MarkupString)"This will <b>truncate</b> both tables and restart identities in the playground database. Continue?",
+            yesText: "Reset",
+            cancelText: "Cancel",
+            options: new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+
+        if (yes == true)
+        {
+            try
+            {
+                await Api.ResetPositionsAsync();
+                Snackbar.Add("Tables reset. You can re-run subscriptions now.", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Reset failed: {ex.Message}", Severity.Error);
+            }
+        }
     }
 }

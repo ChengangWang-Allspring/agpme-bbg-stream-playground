@@ -83,6 +83,19 @@ public static class ClientEndpoints
             .WithSummary("Healthcheck")
             .WithOpenApi();
 
+        // Admin
+        var admin = app.MapGroup("/client/admin").WithTags("Admin");
+        admin.MapPost("reset-positions",
+            async (IResetService reset, CancellationToken ct) =>
+            {
+                await reset.ResetPositionsAsync(ct);
+                return Results.Ok(new { reset = "ok" });
+            })
+            .WithSummary("Reset inbound and positions tables")
+            .WithDescription("Truncates app_data.bbg_positions_inbound and app_data.bbg_positions; use with caution.")
+            .WithOpenApi();
+
+
         return app;
     }
 

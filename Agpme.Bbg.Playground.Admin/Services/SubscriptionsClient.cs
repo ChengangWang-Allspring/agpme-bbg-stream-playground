@@ -52,4 +52,11 @@ public sealed class SubscriptionsClient
 
     public async Task<List<Target>?> GetTargetsAsync(CancellationToken ct = default)
         => await _http.GetFromJsonAsync<List<Target>>("/client/config/targets", ct);
+
+    public async Task<bool> ResetPositionsAsync(CancellationToken ct = default)
+    {
+        var res = await _http.PostAsync("/client/admin/reset-positions", content: null, ct);
+        res.EnsureSuccessStatusCode();
+        return true;
+    }
 }
