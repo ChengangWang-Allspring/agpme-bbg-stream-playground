@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Serilog;
 using Npgsql;
-using Agpme.Bbg.Playground.Shared.Streaming;
+using Agpme.Bbg.Playground.Simulator.Api.Data;
 
 namespace Agpme.Bbg.Playground.Simulator.Api.Data;
 

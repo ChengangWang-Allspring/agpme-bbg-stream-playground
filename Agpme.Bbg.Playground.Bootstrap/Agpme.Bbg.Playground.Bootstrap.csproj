@@ -30,14 +30,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Allspring.Agpme.Bbg.TestsShared" Version="1.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
     <PackageReference Include="Npgsql" Version="9.0.4" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Agpme.Bbg.Playground.Shared\Agpme.Bbg.Playground.Shared.csproj" />
   </ItemGroup>
 
 </Project>

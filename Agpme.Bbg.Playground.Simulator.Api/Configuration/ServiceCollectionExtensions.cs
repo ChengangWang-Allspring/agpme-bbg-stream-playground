@@ -1,5 +1,5 @@
-﻿using Agpme.Bbg.Playground.Shared.Config;
-using Agpme.Bbg.Playground.Shared.Aws;
+﻿using Agpme.Bbg.Playground.Simulator.Api.Configuration;   
+using Allspring.Agpme.Bbg.TestsShared.Helpers.Aws;        
 using Microsoft.Extensions.Options;
 using Npgsql;
 using Agpme.Bbg.Playground.Simulator.Api.Data;
@@ -19,22 +19,21 @@ public static class ServiceCollectionExtensions
         // Resolve the connection string from AWS once per app lifetime (lazy)
         services.AddSingleton(async sp =>
         {
-            var opts = sp.GetRequiredService<IOptions<AwsSecretsOptions>>().Value;
-
+            var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AwsSecretsOptions>>().Value;
             if (string.IsNullOrWhiteSpace(opts.Arn))
                 throw new InvalidOperationException("StreamAwsSecrets:Arn is required.");
             if (string.IsNullOrWhiteSpace(opts.SecretKeyName))
                 throw new InvalidOperationException("StreamAwsSecrets:SecretKeyName is required.");
+            if (string.IsNullOrWhiteSpace(opts.Region))
+                throw new InvalidOperationException("StreamAwsSecrets:Region is required.");
 
-            var profile = string.IsNullOrWhiteSpace(opts.Profile)
-                ? AwsSecretHelper.ResolveProfileForEnv("DEV")
-                : opts.Profile!;
-
-            var connString = await AwsSecretHelper.GetSecretValueByKeyAsync(
-                profile,
-                opts.Arn!,
-                opts.SecretKeyName!,
-                opts.Region);
+            // Use the NuGet helper. If Profile is null/empty, it will fall back to default chain.
+            var connString = await AwsSecretHelper.GetSecretValueAsync(
+                opts.Profile,              // profile or null
+                opts.Region!,              // required
+                opts.Arn!,                 // secretId
+                opts.SecretKeyName!        // valueKey in SecretString JSON
+            );
 
             return connString;
         });

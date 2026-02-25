@@ -1,8 +1,8 @@
 ﻿using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
-using Agpme.Bbg.Playground.Shared.Postgres;
-using Agpme.Bbg.Playground.Shared.Aws;
+using Allspring.Agpme.Bbg.TestsShared.Helpers.Aws;
+using Allspring.Agpme.Bbg.TestsShared.Helpers.Postgres;
 
 public static class Bootstrap
 {
@@ -24,7 +24,7 @@ public static class Bootstrap
     {
         var cs = cfg["LocalPlaygroundDb:ConnectionString"]!;
         var folder = cfg["DbScripts:Folder"]!;
-        return SqlScriptsApplier.ApplyAsync(cs, folder, Console.WriteLine);
+        return PostgresHelper.ApplySqlScriptsAsync(cs, folder, Console.WriteLine);
     }
 
     public static async Task SyncMetadataAsync(IConfiguration cfg)
@@ -55,7 +55,7 @@ public static class Bootstrap
         var profile = cfg["MetadataAwsSecrets:Profile"]!;
 
         Console.WriteLine($"[INFO] Retrieving source connection from AWS Secret: {arn}");
-        var sourceCs = await AwsSecretHelper.GetSecretValueByKeyAsync(profile, arn, keyName, region);
+        var sourceCs = await AwsSecretHelper.GetSecretValueAsync(profile, region, arn, keyName);
 
         await PostgresSyncHelper.CopyTablesAsync(sourceCs, destCs, tables, truncate);
         Console.WriteLine("[OK] Metadata synchronized.");

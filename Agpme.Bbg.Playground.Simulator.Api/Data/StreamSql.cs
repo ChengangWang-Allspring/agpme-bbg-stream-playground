@@ -1,12 +1,7 @@
-﻿namespace Agpme.Bbg.Playground.Shared.Streaming;
+﻿namespace Agpme.Bbg.Playground.Simulator.Api.Data;
 
 /// <summary>
 /// SQL used by the streaming server to pull Bloomberg JSON from app_data.bbg_positions_stream.
-/// Columns (per table definition):
-///   as_of_date (date), load_bb_entity_type (varchar), load_bb_entity_name (varchar),
-///   load_bb_action (varchar), load_bb_uuid (int), load_process (varchar),
-///   load_date (timestamp), stream_order (int, PK with as_of_date), json_stream (jsonb),
-///   msg_request_id (varchar)
 /// </summary>
 public static class StreamSql
 {
