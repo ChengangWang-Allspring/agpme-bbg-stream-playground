@@ -10,13 +10,19 @@
         <MudGrid>
 
             <MudItem xs="12" sm="6">
+
+                <MudText Typo="Typo.caption">
+                    row → @Row.is_active / @Row.is_required
+                    | local → @_isActive / @_isRequired
+                </MudText>
+
                 <MudTextField @bind-Value="_domain" Label="domain" />
                 <MudTextField @bind-Value="_sourceKind" Label="source_kind" />
                 <MudTextField @bind-Value="_sourceColumn" Label="source_column" />
                 <MudTextField @bind-Value="_targetColumn" Label="target_column" />
                 <MudTextField @bind-Value="_dataType" Label="data_type" />
-                <MudSwitch T="bool" @bind-Checked="_isActive">active</MudSwitch>
-                <MudSwitch T="bool" @bind-Checked="_isRequired">required</MudSwitch>
+                <MudSwitch T="bool" @bind-Value="_isActive" Label="active" />
+                <MudSwitch T="bool" @bind-Value="_isRequired" Label="required" />
                 <MudTextField @bind-Value="_comments" Label="comments" Lines="3"
                               InputStyle="resize: vertical; min-height: 72px;" />
             </MudItem>
