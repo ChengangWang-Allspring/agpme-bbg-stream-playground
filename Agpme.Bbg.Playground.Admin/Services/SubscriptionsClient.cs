@@ -1,4 +1,6 @@
-﻿using System.Net.Http.Json;
+﻿// Agpme.Bbg.Playground.Admin/Services/SubscriptionsClient.cs
+using System.Net.Http.Json;
+using Agpme.Bbg.Playground.Admin.Models;
 
 namespace Agpme.Bbg.Playground.Admin.Services;
 
@@ -8,15 +10,7 @@ public sealed class SubscriptionsClient
     public SubscriptionsClient(IHttpClientFactory factory)
         => _http = factory.CreateClient("subsapi");
 
-    // Shapes mirrored from your Subscriptions API
-    public record SubscriptionKey(string entityType, string entityName);
-    public record SubscriptionMetrics(
-        int InitialPaintObjects, int IntradayObjects, int Heartbeats,
-        DateTimeOffset? LastMessageAt, DateTimeOffset? StartedAt,
-        DateTimeOffset? StoppedAt, string? LastError, int State);
-    public record SubscriptionStatus(SubscriptionKey Key, SubscriptionMetrics Metrics);
-    public record Target(string entityType, string entityName);
-
+    // ---------------- Subscriptions ----------------
     public async Task<List<SubscriptionStatus>> ListAsync(CancellationToken ct = default)
         => await _http.GetFromJsonAsync<List<SubscriptionStatus>>("/client/subscriptions", ct) ?? new();
 
@@ -40,6 +34,7 @@ public sealed class SubscriptionsClient
         res.EnsureSuccessStatusCode();
     }
 
+    // ---------------- Settings / Config ----------------
     public async Task<string?> GetAsOfDateAsync(CancellationToken ct = default)
         => (await _http.GetFromJsonAsync<Dictionary<string, string?>>("/client/settings/as-of-date", ct))?["as_of_date"];
 
@@ -53,6 +48,7 @@ public sealed class SubscriptionsClient
     public async Task<List<Target>?> GetTargetsAsync(CancellationToken ct = default)
         => await _http.GetFromJsonAsync<List<Target>>("/client/config/targets", ct);
 
+    // ---------------- Admin ----------------
     public async Task<bool> ResetPositionsAsync(CancellationToken ct = default)
     {
         var res = await _http.PostAsync("/client/admin/reset-positions", content: null, ct);
@@ -60,10 +56,43 @@ public sealed class SubscriptionsClient
         return true;
     }
 
-    public record DbHealth(string status, string? error);
-
+    // ---------------- Health ----------------
     public async Task<DbHealth> GetDbHealthAsync(CancellationToken ct = default)
         => await _http.GetFromJsonAsync<DbHealth>("/client/health/db", ct)
            ?? new DbHealth("offline", "no response");
 
+    // ---------------- Metadata ----------------
+    public Task<List<InboundColsMapRow>?> GetInboundColsMapAsync(CancellationToken ct = default)
+        => _http.GetFromJsonAsync<List<InboundColsMapRow>>("/client/metadata/inbound-cols-map", ct);
+
+    public async Task<bool> UpdateInboundColAsync(long mapId, MetadataUpdateDto dto, CancellationToken ct = default)
+    {
+        var res = await _http.PutAsJsonAsync($"/client/metadata/inbound-cols-map/{mapId}", dto, ct);
+        res.EnsureSuccessStatusCode();
+        return await res.Content.ReadFromJsonAsync<bool>(cancellationToken: ct);
+    }
+
+    public async Task<int> ResyncInboundColsMapAsync(CancellationToken ct = default)
+    {
+        var res = await _http.PostAsync("/client/metadata/inbound-cols-map/resync", content: null, ct);
+        res.EnsureSuccessStatusCode();
+        var doc = await res.Content.ReadFromJsonAsync<Dictionary<string, int>>(cancellationToken: ct);
+        return doc?["rows"] ?? 0;
+    }
+
+    public async Task<ValidateResult> ValidateExprAsync(
+        string? targetColumn, string? sourceColumn, string? transformExpr, string? updateSetExpr, CancellationToken ct = default)
+    {
+        var body = new
+        {
+            target_column = targetColumn,
+            source_column = sourceColumn,
+            transform_expr = transformExpr,
+            update_set_expr = updateSetExpr
+        };
+        var res = await _http.PostAsJsonAsync("/client/metadata/inbound-cols-map/validate", body, ct);
+        res.EnsureSuccessStatusCode();
+        return (await res.Content.ReadFromJsonAsync<ValidateResult>(cancellationToken: ct))
+               ?? new ValidateResult(false, "unknown", "no response");
+    }
 }

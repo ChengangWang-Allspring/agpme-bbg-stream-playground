@@ -1,0 +1,79 @@
+﻿@page "/metadata"
+@using Agpme.Bbg.Playground.Admin.Services
+@using Agpme.Bbg.Playground.Admin.Models
+@inject SubscriptionsClient Api
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<PageTitle>Metadata</PageTitle>
+
+<MudPaper Class="pa-4">
+    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+        <MudText Typo="Typo.h5">Inbound Column Map</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Reload">Refresh</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Resync">Resync from DEV</MudButton>
+    </MudStack>
+
+    <MudTable Items="_rows" Hover="true" Dense="true" Class="mt-4">
+        <HeaderContent>
+            <MudTh>map_id</MudTh>
+            <MudTh>source_kind</MudTh>
+            <MudTh>source_column</MudTh>
+            <MudTh>target_column</MudTh>
+            <MudTh>data_type</MudTh>
+            <MudTh>active</MudTh>
+            <MudTh>required</MudTh>
+            <MudTh>action</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.map_id</MudTd>
+            <MudTd>@context.source_kind</MudTd>
+            <MudTd>@context.source_column</MudTd>
+            <MudTd>@context.target_column</MudTd>
+            <MudTd>@context.data_type</MudTd>
+            <MudTd>@context.is_active</MudTd>
+            <MudTd>@context.is_required</MudTd>
+            <MudTd>
+                <MudButton Size="Size.Small" OnClick="@(() => Edit(context))" StartIcon="@Icons.Material.Filled.Edit">Edit</MudButton>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>No metadata rows found.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private List<InboundColsMapRow> _rows = new();
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload()
+    {
+        _rows = await Api.GetInboundColsMapAsync() ?? new();
+    }
+
+    private async Task Resync()
+    {
+        try
+        {
+            var n = await Api.ResyncInboundColsMapAsync();
+            Snackbar.Add($"Resync complete. Rows: {n}.", Severity.Success);
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Resync failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task Edit(InboundColsMapRow row)
+    {
+        var parms = new DialogParameters<MetadataEditDialog> { { x => x.Row, row } };
+        var opt = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        var dlg = await Dialogs.ShowAsync<MetadataEditDialog>($"Edit #{row.map_id}", parms, opt);
+        var res = await dlg.Result;
+        if (!res.Canceled) await Reload();
+    }
+}

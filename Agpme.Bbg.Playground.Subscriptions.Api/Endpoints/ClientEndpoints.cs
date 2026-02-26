@@ -1,6 +1,7 @@
 ﻿using Agpme.Bbg.Playground.Subscriptions.Api.Configuration;
 using Agpme.Bbg.Playground.Subscriptions.Api.Models;
 using Agpme.Bbg.Playground.Subscriptions.Api.Services;
+using Allspring.Agpme.Bbg.TestsShared.Helpers.Postgres;
 using Npgsql;
 
 namespace Agpme.Bbg.Playground.Subscriptions.Api.Endpoints;
@@ -125,8 +126,66 @@ public static class ClientEndpoints
             .WithOpenApi();
 
 
+        // Metadata
+        var metadata = app.MapGroup("/client/metadata").WithTags("Metadata");
+
+        // GET all rows
+        metadata.MapGet("inbound-cols-map",
+            async (IConfiguration cfg, CancellationToken ct) =>
+            {
+                var cs = cfg.GetSection("ClientDb:ConnectionString").Value!;
+                var rows = await MetadataHelper.GetInboundColsMapAsync(cs, ct);
+                return Results.Ok(rows);
+            });
+
+        // PUT update one row
+        metadata.MapPut("inbound-cols-map/{mapId:long}",
+            async (IConfiguration cfg, long mapId, MetadataHelper.InboundColsMapUpdate dto, CancellationToken ct) =>
+            {
+                var cs = cfg.GetSection("ClientDb:ConnectionString").Value!;
+                var ok = await MetadataHelper.UpdateInboundColsMapAsync(cs, mapId, dto, ct);
+                return Results.Ok(ok);
+            });
+
+        // POST resync (DEV → local)
+        metadata.MapPost("inbound-cols-map/resync",
+            async (IConfiguration cfg, CancellationToken ct) =>
+            {
+                var destCs = cfg.GetSection("ClientDb:ConnectionString").Value!;
+                // Source from your existing MetadataAwsSecrets block (same as Bootstrap)
+                var arn = cfg["MetadataAwsSecrets:Arn"]!;
+                var key = cfg["MetadataAwsSecrets:KeyName"]!;
+                var region = cfg["MetadataAwsSecrets:Region"]!;
+                var profile = cfg["MetadataAwsSecrets:Profile"]; // optional
+                var sourceCs = await Allspring.Agpme.Bbg.TestsShared.Helpers.Aws.AwsSecretHelper
+                    .GetSecretValueAsync(profile, region, arn, key, ct);
+
+                var n = await MetadataHelper.ResyncInboundColsMapAsync(sourceCs, destCs, ct);
+                return Results.Ok(new { rows = n });
+            });
+
+        // POST validate (syntax only)
+        metadata.MapPost("inbound-cols-map/validate",
+            async (IConfiguration cfg, [AsParameters] ValidateDto dto, CancellationToken ct) =>
+            {
+                var cs = cfg.GetSection("ClientDb:ConnectionString").Value!;
+                if (!string.IsNullOrWhiteSpace(dto.transform_expr))
+                {
+                    var r = await MetadataHelper.ValidateTransformExprAsync(cs, dto.target_column, dto.source_column, dto.transform_expr, ct);
+                    if (!r.ok) return Results.Ok(new { ok = false, kind = r.kind, error = r.error });
+                }
+                if (!string.IsNullOrWhiteSpace(dto.update_set_expr))
+                {
+                    var r = await MetadataHelper.ValidateUpdateSetExprAsync(cs, dto.target_column ?? "", dto.update_set_expr!, ct);
+                    if (!r.ok) return Results.Ok(new { ok = false, kind = r.kind, error = r.error });
+                }
+                return Results.Ok(new { ok = true });
+            });
+
         return app;
     }
 
     public record AsOfDto(string? as_of_date);
+
+    public sealed record ValidateDto(string? target_column, string? source_column, string? transform_expr, string? update_set_expr);
 }

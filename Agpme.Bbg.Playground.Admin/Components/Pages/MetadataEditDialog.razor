@@ -1,0 +1,108 @@
+﻿@using Agpme.Bbg.Playground.Admin.Services
+@using Agpme.Bbg.Playground.Admin.Models
+@inject SubscriptionsClient Api
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>Edit @Row.map_id</TitleContent>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_domain"       Label="domain" />
+                <MudTextField @bind-Value="_sourceKind"   Label="source_kind" />
+                <MudTextField @bind-Value="_sourceColumn" Label="source_column" />
+                <MudTextField @bind-Value="_targetColumn" Label="target_column" />
+                <MudTextField @bind-Value="_dataType"     Label="data_type" />
+                <MudSwitch T="bool" @bind-Checked="_isActive">active</MudSwitch>
+                <MudSwitch T="bool" @bind-Checked="_isRequired">required</MudSwitch>
+                <MudTextField @bind-Value="_comments"     Label="comments" Lines="3" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_defaultExpr"   Label="default_expr" Lines="3" />
+                <MudTextField @bind-Value="_transformExpr" Label="transform_expr" Lines="6" />
+                <MudTextField @bind-Value="_updateSetExpr" Label="update_set_expr" Lines="6" />
+                <MudStack Row Spacing="2" Class="mt-2">
+                    <MudButton Variant="Variant.Outlined" OnClick="Validate">Validate</MudButton>
+                    @if (!string.IsNullOrWhiteSpace(_validationMsg))
+                    {
+                        <MudChip T="string" Color="@( _validationOk ? Color.Success : Color.Error )" Variant="Variant.Filled">
+                            @_validationMsg
+                        </MudChip>
+                    }
+                </MudStack>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public InboundColsMapRow Row { get; set; } = default!;
+
+    // Local fields
+    private string? _domain = default!;
+    private string? _sourceKind = default!;
+    private string? _sourceColumn = default!;
+    private string? _targetColumn = default!;
+    private string? _dataType = default!;
+    private bool _isActive;
+    private bool _isRequired;
+    private string? _comments;
+    private string? _defaultExpr;
+    private string? _transformExpr;
+    private string? _updateSetExpr;
+
+    private bool _validationOk = false;
+    private string? _validationMsg;
+
+    protected override void OnParametersSet()
+    {
+        _domain        = Row.domain;
+        _sourceKind    = Row.source_kind;
+        _sourceColumn  = Row.source_column;
+        _targetColumn  = Row.target_column;
+        _dataType      = Row.data_type;
+        _isActive      = Row.is_active;
+        _isRequired    = Row.is_required;
+        _comments      = Row.comments;
+        _defaultExpr   = Row.default_expr;
+        _transformExpr = Row.transform_expr;
+        _updateSetExpr = Row.update_set_expr;
+    }
+
+    private async Task Validate()
+    {
+        var vr = await Api.ValidateExprAsync(
+            targetColumn: _targetColumn,
+            sourceColumn: _sourceColumn,
+            transformExpr: _transformExpr,
+            updateSetExpr: _updateSetExpr);
+        _validationOk  = vr.ok;
+        _validationMsg = vr.ok ? "Syntax OK" : $"{vr.kind}: {vr.error}";
+        StateHasChanged();
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            var dto = new MetadataUpdateDto(
+                _domain, _sourceColumn, _targetColumn, _dataType, _comments,
+                _isActive, _isRequired, _defaultExpr, _transformExpr, _updateSetExpr, _sourceKind);
+            var ok = await Api.UpdateInboundColAsync(Row.map_id, dto);
+            if (!ok) throw new InvalidOperationException("Row not updated.");
+            Snackbar.Add("Saved.", Severity.Success);
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Save failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => Dialog.Cancel();
+}

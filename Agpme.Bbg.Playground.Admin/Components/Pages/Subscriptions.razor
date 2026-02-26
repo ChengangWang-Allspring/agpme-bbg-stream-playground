@@ -1,5 +1,6 @@
 ﻿@page "/subscriptions"
 @using Agpme.Bbg.Playground.Admin.Services
+@using Agpme.Bbg.Playground.Admin.Models
 @inject SubscriptionsClient Api
 @inject ISnackbar Snackbar
 @using MudBlazor
@@ -112,7 +113,7 @@
                 }
                 else
                 {
-                    <MudButton Size="Size.Small" Color="Color.Primary" OnClick="@(() => Start(new(context.EntityType, context.EntityName)))">
+                    <MudButton Size="Size.Small" Color="Color.Primary" OnClick="@(() => Start(new SubscriptionKey(context.EntityType, context.EntityName)))">
                         Start
                     </MudButton>
                 }
@@ -209,7 +210,7 @@
     }
 
     // ---------------- Actions ----------------
-    private async Task Start(SubscriptionsClient.SubscriptionKey key)
+    private async Task Start(SubscriptionKey key)
     {
         if (_dbStatus != "online")
         {
@@ -222,7 +223,7 @@
         await Reload();
     }
 
-    private async Task Stop(SubscriptionsClient.SubscriptionKey key)
+    private async Task Stop(SubscriptionKey key)
     {
         var ok = await Api.StopAsync(key);
         Snackbar.Add(ok ? "Stopped." : "Not running.", ok ? Severity.Info : Severity.Warning);
@@ -255,8 +256,7 @@
         int stopped = 0;
         foreach (var s in running)
         {
-            var ok = await Api.StopAsync(new SubscriptionsClient.SubscriptionKey(
-                s.Key.entityType, s.Key.entityName));
+            var ok = await Api.StopAsync(new SubscriptionKey(s.Key.entityType, s.Key.entityName));
             if (ok) stopped++;
         }
 
