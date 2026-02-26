@@ -20,9 +20,8 @@ public sealed class CompareRequestDto
     public string entityType { get; set; } = "accounts";     // "accounts" | "groups"
     public string entityName { get; set; } = "";
     public string asOfDate { get; set; } = "";               // yyyy-MM-dd
-
-    public string expectedSource { get; set; } = "csv";      // csv|db-history|external-db
-    public string? expectedCsvPath { get; set; }
+    // expectedSource: "prod-current" | "prod-history"
+    public string expectedSource { get; set; } = "prod-current";
 
     public bool oneStepMode { get; set; } = true;
     public bool twoStepsMode { get; set; } = false;

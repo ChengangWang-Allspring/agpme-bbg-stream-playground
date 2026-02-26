@@ -1,7 +1,6 @@
 ﻿using System.Globalization;
 using Allspring.Agpme.Bbg.TestsShared.Comparison;
 using Allspring.Agpme.Bbg.TestsShared.DataAccess.Db;
-using Allspring.Agpme.Bbg.TestsShared.DataAccess.Files;
 using Allspring.Agpme.Bbg.TestsShared.Models;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
@@ -33,32 +32,29 @@ public sealed class PositionsCompareService : IPositionsCompareService
             : req.outputRoot!;
         Directory.CreateDirectory(outputRoot);
 
-        // 2) Load EXPECTED
+        // 2) Load EXPECTED (PROD only)
         List<BbgPosition> expected = new();
-        if (string.Equals(req.expectedSource, "csv", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(req.expectedSource, "prod-current", StringComparison.OrdinalIgnoreCase))
         {
-            if (string.IsNullOrWhiteSpace(req.expectedCsvPath) || !File.Exists(req.expectedCsvPath))
-                return Fail("Expected CSV not found.", outputRoot);
-
-            expected = BbgPositionsCsv.Load(req.expectedCsvPath, orderByDefaultKey: true);
-        }
-        else if (string.Equals(req.expectedSource, "db-history", StringComparison.OrdinalIgnoreCase))
-        {
-            await using var conn = new NpgsqlConnection(_localCs);
-            await conn.OpenAsync(ct);
-            var q = new BbgPositionsDb.Query(asOf, req.entityName);
-            expected = await BbgPositionsDb.QueryHistoryAsync(conn, q);
-        }
-        else if (string.Equals(req.expectedSource, "external-db", StringComparison.OrdinalIgnoreCase))
-        {
-            // Optionally fetch a DEV connection string via AWS Secret (same pattern you use elsewhere)
-            var extCs = _cfg["Compare:ExternalDb:ConnectionString"]
-                ?? throw new InvalidOperationException("Compare:ExternalDb:ConnectionString not set.");
-            await using var conn = new NpgsqlConnection(extCs);
+            var prodCs = await GetProdConnectionStringAsync(ct);
+            await using var conn = new NpgsqlConnection(prodCs);
             await conn.OpenAsync(ct);
             var q = new BbgPositionsDb.Query(asOf, req.entityName);
             expected = await BbgPositionsDb.QueryCurrentAsync(conn, q);
         }
+        else if (string.Equals(req.expectedSource, "prod-history", StringComparison.OrdinalIgnoreCase))
+        {
+            var prodCs = await GetProdConnectionStringAsync(ct);
+            await using var conn = new NpgsqlConnection(prodCs);
+            await conn.OpenAsync(ct);
+            var q = new BbgPositionsDb.Query(asOf, req.entityName);
+            expected = await BbgPositionsDb.QueryHistoryAsync(conn, q);
+        }
+        else
+        {
+            return Fail($"Unsupported expectedSource '{req.expectedSource}'. Use 'prod-current' or 'prod-history'.", outputRoot);
+        }
+
 
         // 3) Load ACTUAL (local current)
         List<BbgPosition> actual;
@@ -127,5 +123,23 @@ public sealed class PositionsCompareService : IPositionsCompareService
 
         static CompareResponse Fail(string reason, string dir) =>
             new() { success = false, message = reason, outputDir = dir };
+    }
+
+    // Resolve the PROD connection string via StreamAwsSecrets + shared AWS helper
+    private async Task<string> GetProdConnectionStringAsync(CancellationToken ct)
+    {
+        var region = _cfg["StreamAwsSecrets:Region"]
+            ?? throw new InvalidOperationException("StreamAwsSecrets:Region is required.");
+        var arn = _cfg["StreamAwsSecrets:Arn"]
+            ?? throw new InvalidOperationException("StreamAwsSecrets:Arn is required.");
+        var keyName = _cfg["StreamAwsSecrets:SecretKeyName"]
+            ?? throw new InvalidOperationException("StreamAwsSecrets:SecretKeyName is required.");
+        var profile = _cfg["StreamAwsSecrets:Profile"]; // optional
+
+        var cs = await Allspring.Agpme.Bbg.TestsShared.Helpers.Aws.AwsSecretHelper
+            .GetSecretValueAsync(profile, region, arn, keyName, ct);
+        if (string.IsNullOrWhiteSpace(cs))
+            throw new InvalidOperationException("Resolved PROD connection string is empty.");
+        return cs;
     }
 }

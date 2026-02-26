@@ -5,8 +5,8 @@ public sealed class CompareRequest
     public string entityType { get; set; } = default!;   // "accounts" | "groups"
     public string entityName { get; set; } = default!;
     public string asOfDate { get; set; } = default!;     // yyyy-MM-dd
-    public string expectedSource { get; set; } = "csv";  // csv|db-history|external-db
-    public string? expectedCsvPath { get; set; }
+    // expectedSource: "prod-current" | "prod-history"
+    public string expectedSource { get; set; } = "prod-current";
 
     // Modes
     public bool oneStepMode { get; set; } = true;

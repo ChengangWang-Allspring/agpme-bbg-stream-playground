@@ -15,40 +15,66 @@
     </MudStack>
 
     <MudForm Class="mt-4">
-        <!-- Entity / AsOf -->
-        <MudStack Row="true" Spacing="2">
-            <MudSelect T="string"
-                       Label="Entity Type"
-                       Value="@_req.entityType"
-                       ValueChanged="@( (string v) => { _req.entityType = v; RebuildEntityNames(); StateHasChanged(); } )"
-                       Dense="true"
-                       Style="width: 180px;">
-                <MudSelectItem Value="@("accounts")">accounts</MudSelectItem>
-                <MudSelectItem Value="@("groups")">groups</MudSelectItem>
-            </MudSelect>
-            <MudSelect T="string" Label="Entity Name" @bind-Value="_req.entityName" Dense="true" Style="min-width: 260px;">
-                @foreach (var n in _entityNames)
-                {
-                    <MudSelectItem Value="@n">@n</MudSelectItem>
-                }
-            </MudSelect>
-            <MudDatePicker @bind-Date="_asOfPick" Label="As-of" DateFormat="yyyy-MM-dd" Margin="Margin.Dense" Clearable="true" />
-        </MudStack>
+        <MudGrid Class="mt-1">
+            <!-- LEFT = Playground (“Actual” from local) -->
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-3">
+                    <MudText Typo="Typo.h6">Playground Position (Actual)</MudText>
+                    <MudText Typo="Typo.caption" Class="mb-2">
+                        Reads from local <code>app_data.bbg_positions</code> using the inputs below.
+                    </MudText>
 
-        <!-- Expected source -->
-        <MudStack Row="true" Spacing="2" Class="mt-3">
-            <MudSelect T="string" Label="Expected Source" @bind-Value="_req.expectedSource" Dense="true" Style="width: 220px;">
-                <MudSelectItem Value="@("csv")">csv (baseline)</MudSelectItem>
-                <MudSelectItem Value="@("db-history")">db-history (local)</MudSelectItem>
-                <MudSelectItem Value="@("external-db")">external-db</MudSelectItem>
-            </MudSelect>
+                    <MudStack Row="true" Spacing="2">
+                        <!-- Entity Type -->
+                        <MudSelect T="string"
+                                   Label="Entity Type"
+                                   Value="@_req.entityType"
+                                   ValueChanged="@( (string v) => { _req.entityType = v; RebuildEntityNames(); StateHasChanged(); } )"
+                                   Dense="true" Style="width: 180px;">
+                            <MudSelectItem Value="@("accounts")">accounts</MudSelectItem>
+                            <MudSelectItem Value="@("groups")">groups</MudSelectItem>
+                        </MudSelect>
 
-            @if (_req.expectedSource == "csv")
-            {
-                <MudTextField Label="Expected CSV Path" @bind-Value="_req.expectedCsvPath" Margin="Margin.Dense" Style="min-width: 420px;"
-                              Placeholder="C:\path\to\expected.csv" />
-            }
-        </MudStack>
+                        <!-- Entity Name -->
+                        <MudSelect T="string" Label="Entity Name" @bind-Value="_req.entityName" Dense="true" Style="min-width: 260px;">
+                            @foreach (var n in _entityNames)
+                            {
+                                <MudSelectItem Value="@n">@n</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <!-- As-Of date -->
+                        <MudDatePicker @bind-Date="_asOfPick" Label="As-of (Actual)" DateFormat="yyyy-MM-dd"
+                                       Margin="Margin.Dense" Clearable="true" />
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+
+            <!-- RIGHT = PROD (“Expected”) -->
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-3">
+                    <MudText Typo="Typo.h6">PROD (Expected)</MudText>
+                    <MudText Typo="Typo.caption" Class="mb-2">
+                        Read-only DB via AWS secret. Choose whether to compare against PROD <b>current</b> or PROD <b>history</b>.
+                    </MudText>
+
+                    <!-- Current vs History selector (maps to CompareRequest.expectedSource) -->
+                    <MudRadioGroup T="string" @bind-Value="_req.expectedSource">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                            <MudRadio T="string" Value="@("prod-current")">PROD current</MudRadio>
+                            <MudRadio T="string" Value="@("prod-history")">PROD history</MudRadio>
+                        </MudStack>
+                    </MudRadioGroup>
+
+                    <!-- Optional: explain as-of usage -->
+                    <MudText Typo="Typo.caption" Class="mt-1">
+                        The same <b>As-of</b> date (left) is used for both sides.
+                        “PROD current” queries production <code>bbg_positions</code>.
+                        “PROD history” queries production <code>bbg_positions_hist</code>.
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
 
         <!-- Mode -->
         <MudStack Row="true" Spacing="2" Class="mt-3" AlignItems="AlignItems.Center">
@@ -136,7 +162,7 @@
         </MudStack>
 
         <MudStack Row="true" Spacing="2" Class="mt-4">
-            <MudButton Color="Color.Primary" OnClick="RunCompare">Run</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RunCompare">Run Compare</MudButton>
             <MudButton Variant="Variant.Outlined" OnClick="ResetForm">Reset</MudButton>
         </MudStack>
     </MudForm>
@@ -257,8 +283,7 @@
         RebuildEntityNames();
         _req.entityName = _entityNames.FirstOrDefault() ?? "";
         _asOfPick = DateTime.Today;
-        _req.expectedSource = "db-history";
-        _req.expectedCsvPath = null;
+        _req.expectedSource = "prod-current";
         _req.oneStepMode = true;
         _req.twoStepsMode = false;
         _req.useAllFields = true;
