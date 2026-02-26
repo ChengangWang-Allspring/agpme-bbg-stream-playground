@@ -11,25 +11,27 @@
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
         <MudText Typo="Typo.h5">Compare Positions</MudText>
         <MudSpacer />
-        <MudButton Variant="Variant.Outlined" OnClick="LoadOptions">Reload Options</MudButton>
+        <MudButton Variant="Variant.Outlined" OnClick="ReloadOptionsAndReset">Reload Options</MudButton>
     </MudStack>
 
     <MudForm Class="mt-4">
         <!-- Entity / AsOf -->
         <MudStack Row="true" Spacing="2">
-            <MudSelect T="string" Label="Entity Type" @bind-Value="_req.entityType" Dense="true" Style="width: 180px;" 
-                @onchange="@(e => OnEntityTypeChanged(e?.Value?.ToString() ?? "groups"))">
-            <MudSelectItem Value="@("accounts")">accounts</MudSelectItem>
-            <MudSelectItem Value="@("groups")">groups</MudSelectItem>
-        </MudSelect>
-
+            <MudSelect T="string"
+                       Label="Entity Type"
+                       Value="@_req.entityType"
+                       ValueChanged="@( (string v) => { _req.entityType = v; RebuildEntityNames(); StateHasChanged(); } )"
+                       Dense="true"
+                       Style="width: 180px;">
+                <MudSelectItem Value="@("accounts")">accounts</MudSelectItem>
+                <MudSelectItem Value="@("groups")">groups</MudSelectItem>
+            </MudSelect>
             <MudSelect T="string" Label="Entity Name" @bind-Value="_req.entityName" Dense="true" Style="min-width: 260px;">
                 @foreach (var n in _entityNames)
                 {
                     <MudSelectItem Value="@n">@n</MudSelectItem>
                 }
             </MudSelect>
-            <MudTextField Label="Entity Name" @bind-Value="_req.entityName" Margin="Margin.Dense" Style="min-width: 260px;" />
             <MudDatePicker @bind-Date="_asOfPick" Label="As-of" DateFormat="yyyy-MM-dd" Margin="Margin.Dense" Clearable="true" />
         </MudStack>
 
@@ -200,6 +202,13 @@
         _options = await CompareApi.GetOptionsAsync();
         _keyOrder = _options?.keyOrder ?? Array.Empty<string>();
         StateHasChanged();
+    }
+
+    private async Task ReloadOptionsAndReset()
+    {
+        await LoadOptions();      // get latest key order + defaults
+        ResetForm();              // reapply defaults to the request + lists
+        StateHasChanged();        // make the refresh deterministic
     }
 
     // Utility: (re)build the entity-name list for the current type
