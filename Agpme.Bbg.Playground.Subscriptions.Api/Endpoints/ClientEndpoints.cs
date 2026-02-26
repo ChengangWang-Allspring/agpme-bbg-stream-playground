@@ -166,19 +166,22 @@ public static class ClientEndpoints
 
         // POST validate (syntax only)
         metadata.MapPost("inbound-cols-map/validate",
-            async (IConfiguration cfg, [AsParameters] ValidateDto dto, CancellationToken ct) =>
+            async (IConfiguration cfg, ValidateDto dto, CancellationToken ct) =>
             {
                 var cs = cfg.GetSection("ClientDb:ConnectionString").Value!;
+
                 if (!string.IsNullOrWhiteSpace(dto.transform_expr))
                 {
                     var r = await MetadataHelper.ValidateTransformExprAsync(cs, dto.target_column, dto.source_column, dto.transform_expr, ct);
                     if (!r.ok) return Results.Ok(new { ok = false, kind = r.kind, error = r.error });
                 }
+
                 if (!string.IsNullOrWhiteSpace(dto.update_set_expr))
                 {
                     var r = await MetadataHelper.ValidateUpdateSetExprAsync(cs, dto.target_column ?? "", dto.update_set_expr!, ct);
                     if (!r.ok) return Results.Ok(new { ok = false, kind = r.kind, error = r.error });
                 }
+
                 return Results.Ok(new { ok = true });
             });
 

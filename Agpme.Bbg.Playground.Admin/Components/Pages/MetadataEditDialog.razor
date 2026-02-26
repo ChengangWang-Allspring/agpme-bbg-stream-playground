@@ -48,6 +48,14 @@
             </MudItem>
 
         </MudGrid>
+@*         @if (!string.IsNullOrWhiteSpace(_lastValidatePayload))
+        {
+            <MudText Typo="Typo.caption">req: @_lastValidatePayload</MudText>
+        }
+        @if (!string.IsNullOrWhiteSpace(_lastValidateResponse))
+        {
+            <MudText Typo="Typo.caption">res: @_lastValidateResponse</MudText>
+        } *@
     </DialogContent>
 
     <DialogActions>
@@ -75,6 +83,8 @@
 
     private bool _validationOk = false;
     private string? _validationMsg;
+    private string? _lastValidatePayload;
+    private string? _lastValidateResponse;
 
     protected override void OnParametersSet()
     {
@@ -93,13 +103,28 @@
 
     private async Task Validate()
     {
+        var payload = new
+        {
+            target_column = _targetColumn,
+            source_column = _sourceColumn,
+            transform_expr = _transformExpr,
+            update_set_expr = _updateSetExpr
+        };
+
+        // record what we are about to send
+        _lastValidatePayload = System.Text.Json.JsonSerializer.Serialize(payload);
+
         var vr = await Api.ValidateExprAsync(
             targetColumn: _targetColumn,
             sourceColumn: _sourceColumn,
             transformExpr: _transformExpr,
             updateSetExpr: _updateSetExpr);
-        _validationOk  = vr.ok;
-        _validationMsg = vr.ok ? "Syntax OK" : $"{vr.kind}: {vr.error}";
+
+        // record response
+        _lastValidateResponse = System.Text.Json.JsonSerializer.Serialize(vr);
+
+        _validationOk = vr.ok;
+        _validationMsg = vr.ok ? "Syntax OK" : $"{vr.kind ?? "error"}: {vr.error ?? "(no details)"}";
         StateHasChanged();
     }
 
