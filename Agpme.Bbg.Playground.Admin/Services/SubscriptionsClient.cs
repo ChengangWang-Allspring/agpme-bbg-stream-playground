@@ -59,4 +59,11 @@ public sealed class SubscriptionsClient
         res.EnsureSuccessStatusCode();
         return true;
     }
+
+    public record DbHealth(string status, string? error);
+
+    public async Task<DbHealth> GetDbHealthAsync(CancellationToken ct = default)
+        => await _http.GetFromJsonAsync<DbHealth>("/client/health/db", ct)
+           ?? new DbHealth("offline", "no response");
+
 }

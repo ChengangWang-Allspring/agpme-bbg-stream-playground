@@ -12,6 +12,17 @@
     <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
         <MudText Typo="Typo.h5">Subscriptions</MudText>
         <MudSpacer />
+        <!-- DB status -->
+        <MudChip T="string"
+                 Color="@(_dbStatus == "online" ? Color.Success : Color.Error)"
+                 Variant="Variant.Filled"
+                 StartIcon="@(_dbStatus == "online" ? Icons.Material.Filled.Storage : Icons.Material.Filled.Warning)">
+            DB: @_dbStatus
+        </MudChip>
+        @if (!string.IsNullOrWhiteSpace(_dbError) && _dbStatus != "online")
+        {
+            <MudTooltip Text="@_dbError"><MudIcon Icon="@Icons.Material.Filled.Info" Class="ml-1" /></MudTooltip>
+        }
         <!-- As‑of group (picker + Apply kept together) -->
         <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
             <MudDatePicker T="DateTime?"
@@ -25,7 +36,7 @@
                            Placeholder="empty = today"
                            Style="width: 320px;" />    @* ⬅ widen input so it doesn't clip *@
             <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
+                       Color="Color.Default"
                        OnClick="ApplyAsOfAsync">
                 Apply
             </MudButton>
@@ -37,10 +48,12 @@
         </MudStack>
 
         <!-- Refresh All -->
-        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="Reload" Class="ml-4">Refresh</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Reload" Class="ml-4">Refresh</MudButton>
         <!-- Start All (uses configured targets) -->
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="StartAll" Class="ml-2">Start All</MudButton>
-        <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="StopAll"  Class="ml-2">Stop All</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_dbStatus != "online")" OnClick="StartAll" Class="ml-2">
+            Start All
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="StopAll" Class="ml-2">Stop All</MudButton>
     </MudStack>
 
     <!-- Unified table -->
@@ -127,6 +140,8 @@
     private List<RowVm> _rows = new();
     private DateTime? _pickAsOf;          // <-- DateTime? for the picker (null => today)
     private string? _asOfLabel;           // what API currently holds (or null => today)
+    private string _dbStatus = "unknown";
+    private string? _dbError;
 
     // ---------------- Life cycle ----------------
     protected override async Task OnInitializedAsync()
@@ -134,6 +149,11 @@
 
     private async Task Reload()
     {
+        // DB health first
+        var db = await Api.GetDbHealthAsync();
+        _dbStatus = db.status;
+        _dbError = db.error;
+
         // Pull current as_of_date label
         _asOfLabel = await Api.GetAsOfDateAsync();
 
@@ -191,6 +211,11 @@
     // ---------------- Actions ----------------
     private async Task Start(SubscriptionsClient.SubscriptionKey key)
     {
+        if (_dbStatus != "online")
+        {
+            Snackbar.Add("Local DB is offline. Start the Postgres Docker container first.", Severity.Error);
+            return;
+        }
         var res = await Api.StartAsync(key);
         if (res is not null)
             Snackbar.Add($"Start requested for {key.entityType}/{key.entityName}.", Severity.Success);
@@ -206,6 +231,11 @@
 
     private async Task StartAll()
     {
+        if (_dbStatus != "online")
+        {
+            Snackbar.Add("Local DB is offline. Start the Postgres Docker container first.", Severity.Error);
+            return;
+        }
         await Api.StartAllAsync();
         Snackbar.Add("Start-all dispatched.", Severity.Success);
         await Reload();

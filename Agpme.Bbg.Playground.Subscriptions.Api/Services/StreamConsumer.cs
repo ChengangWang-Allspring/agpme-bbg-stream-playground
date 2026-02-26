@@ -186,7 +186,7 @@ public static class StreamConsumer
 
         if (ShouldExcludePositionJson(json))
         {
-            log.Information("Filtered out InitialPaint row with zero/null POSITION_WITHOUT_PENDING");
+            //log.Information("Filtered out InitialPaint row with zero/null POSITION_WITHOUT_PENDING");
             return;
         }
 

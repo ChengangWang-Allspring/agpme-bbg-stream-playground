@@ -1,6 +1,7 @@
 ﻿using Agpme.Bbg.Playground.Subscriptions.Api.Configuration;
 using Agpme.Bbg.Playground.Subscriptions.Api.Models;
 using Agpme.Bbg.Playground.Subscriptions.Api.Services;
+using Npgsql;
 
 namespace Agpme.Bbg.Playground.Subscriptions.Api.Endpoints;
 
@@ -82,6 +83,34 @@ public static class ClientEndpoints
             .WithTags("Health")
             .WithSummary("Healthcheck")
             .WithOpenApi();
+
+        // Database health (local playground Postgres)
+        app.MapGet("/client/health/db", async (Microsoft.Extensions.Configuration.IConfiguration cfg, CancellationToken ct) =>
+        {
+            var cs = cfg.GetSection("ClientDb:ConnectionString").Value;
+            if (string.IsNullOrWhiteSpace(cs))
+                return Results.Problem("ClientDb:ConnectionString is not configured.", statusCode: 500);
+
+            try
+            {
+                // Clone CS and force a short connection timeout (seconds)
+                var csb = new Npgsql.NpgsqlConnectionStringBuilder(cs) { Timeout = 3 };
+                await using var conn = new Npgsql.NpgsqlConnection(csb.ToString());
+                await conn.OpenAsync(ct);
+                await using var cmd = new Npgsql.NpgsqlCommand("select 1", conn) { CommandTimeout = 3 };
+                await cmd.ExecuteScalarAsync(ct);
+                return Results.Ok(new { status = "online" });
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(new { status = "offline", error = ex.Message });
+            }
+        })
+        .WithTags("Health")
+        .WithSummary("Local database health")
+        .WithDescription("Checks if the local playground Postgres is reachable (online/offline).")
+        .WithOpenApi();
+
 
         // Admin
         var admin = app.MapGroup("/client/admin").WithTags("Admin");

@@ -106,43 +106,56 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
         await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
 
-        var map = await GetInboundColumnMapCachedAsync(conn, ct);
-        var colList = string.Join(", ", map.Select(m => $"\"{m.SourceColumn}\""));
-        var copySql = $"COPY app_data.bbg_positions_inbound ({colList}) FROM STDIN (FORMAT BINARY)";
+        // Set session-level timeout for the COPY
+        await using (var setTimeout = new NpgsqlCommand("SET statement_timeout = '120s';", conn))
+            await setTimeout.ExecuteNonQueryAsync(ct);
 
-        log.Information("[INBOUND BEFORE] Initial batch → rows={Count}, entity={EntityType}/{EntityName}, as_of={AsOf}",
-               jsons.Count, key.entityType, key.entityName, asOf);
-
-        await using (var writer = await conn.BeginBinaryImportAsync(copySql, ct))
+        try
         {
-            foreach (var json in jsons)
+            var map = await GetInboundColumnMapCachedAsync(conn, ct);
+            var colList = string.Join(", ", map.Select(m => $"\"{m.SourceColumn}\""));
+            var copySql = $"COPY app_data.bbg_positions_inbound ({colList}) FROM STDIN (FORMAT BINARY)";
+
+            log.Information("[INBOUND BEFORE] Initial batch → rows={Count}, entity={EntityType}/{EntityName}, as_of={AsOf}",
+                   jsons.Count, key.entityType, key.entityName, asOf);
+
+            await using (var writer = await conn.BeginBinaryImportAsync(copySql, ct))
             {
-                await writer.StartRowAsync(ct);
-
-                var j = string.IsNullOrWhiteSpace(json) ? new JObject() : JObject.Parse(json);
-                var accountFromJson = GetJsonTextOrNull(j, "ACCOUNT");
-
-                foreach (var m in map)
+                foreach (var json in jsons)
                 {
-                    if (m.SourceKind.Equals("loader", StringComparison.OrdinalIgnoreCase))
+                    await writer.StartRowAsync(ct);
+
+                    var j = string.IsNullOrWhiteSpace(json) ? new JObject() : JObject.Parse(json);
+                    var accountFromJson = GetJsonTextOrNull(j, "ACCOUNT");
+
+                    foreach (var m in map)
                     {
-                        if (m.SourceColumn.Equals("as_of_date", StringComparison.OrdinalIgnoreCase))
-                            await writer.WriteAsync(asOf, NpgsqlDbType.Date, ct);
-                        else
-                            await writer.WriteAsync(GetLoaderValueText(key, asOf, m.SourceColumn, isIntraday: false, accountFromJson, msgRequestId), NpgsqlDbType.Text, ct);
-                    }
-                    else // json
-                    {
-                        var val = GetJsonTextOrNull(j, m.SourceColumn);
-                        await writer.WriteAsync(val, NpgsqlDbType.Text, ct);
+                        if (m.SourceKind.Equals("loader", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (m.SourceColumn.Equals("as_of_date", StringComparison.OrdinalIgnoreCase))
+                                await writer.WriteAsync(asOf, NpgsqlDbType.Date, ct);
+                            else
+                                await writer.WriteAsync(GetLoaderValueText(key, asOf, m.SourceColumn, isIntraday: false, accountFromJson, msgRequestId), NpgsqlDbType.Text, ct);
+                        }
+                        else // json
+                        {
+                            var val = GetJsonTextOrNull(j, m.SourceColumn);
+                            await writer.WriteAsync(val, NpgsqlDbType.Text, ct);
+                        }
                     }
                 }
+                await writer.CompleteAsync(ct);
             }
-            await writer.CompleteAsync(ct);
-        }
 
-        log.Information("[INBOUND AFTER] Initial batch persisted → rows={Count}, entity={EntityType}/{EntityName}, as_of={AsOf}",
-               jsons.Count, key.entityType, key.entityName, asOf);
+            log.Information("[INBOUND AFTER] Initial batch persisted → rows={Count}, entity={EntityType}/{EntityName}, as_of={AsOf}",
+                   jsons.Count, key.entityType, key.entityName, asOf);
+        }
+        finally
+        {
+            // reset to default
+            await using var resetTimeout = new NpgsqlCommand("SET statement_timeout = DEFAULT;", conn);
+            await resetTimeout.ExecuteNonQueryAsync(ct);
+        }
 
     }
 
@@ -163,6 +176,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
         call.Parameters.Add("p_as_of_date", NpgsqlDbType.Date).Value = asOf;
         call.Parameters.AddWithValue("p_account_id_intraday", DBNull.Value);
         call.Parameters.AddWithValue("p_load_bb_entity_name", key.entityName);
+        call.CommandTimeout = 120; // 2 minutes timeout
         await call.ExecuteNonQueryAsync(ct);
 
         log.Information("[UPSERT AFTER] Initial complete → entity={EntityType}/{EntityName}, as_of={AsOf}",
@@ -177,40 +191,53 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
         await using var conn = new NpgsqlConnection(_cs);
         await conn.OpenAsync(ct);
 
-        var map = await GetInboundColumnMapCachedAsync(conn, ct);
-        var colList = string.Join(", ", map.Select(m => $"\"{m.SourceColumn}\""));
-        var copySql = $"COPY app_data.bbg_positions_inbound ({colList}) FROM STDIN (FORMAT BINARY)";
+        // Set session-level timeout for the COPY
+        await using (var setTimeout = new NpgsqlCommand("SET statement_timeout = '120s';", conn))
+            await setTimeout.ExecuteNonQueryAsync(ct);
 
-        var j = string.IsNullOrWhiteSpace(json) ? new JObject() : JObject.Parse(json);
-        var accountFromJson = GetJsonTextOrNull(j, "ACCOUNT");
-
-        log.Information("[INBOUND BEFORE] Intraday → entity={EntityType}/{EntityName}, account={Account}, as_of={AsOf}",
-               key.entityType, key.entityName, accountFromJson, asOf);
-
-        await using (var writer = await conn.BeginBinaryImportAsync(copySql, ct))
+        try
         {
-            await writer.StartRowAsync(ct);
-            foreach (var m in map)
+
+            var map = await GetInboundColumnMapCachedAsync(conn, ct);
+            var colList = string.Join(", ", map.Select(m => $"\"{m.SourceColumn}\""));
+            var copySql = $"COPY app_data.bbg_positions_inbound ({colList}) FROM STDIN (FORMAT BINARY)";
+
+            var j = string.IsNullOrWhiteSpace(json) ? new JObject() : JObject.Parse(json);
+            var accountFromJson = GetJsonTextOrNull(j, "ACCOUNT");
+
+            log.Information("[INBOUND BEFORE] Intraday → entity={EntityType}/{EntityName}, account={Account}, as_of={AsOf}",
+                   key.entityType, key.entityName, accountFromJson, asOf);
+
+            await using (var writer = await conn.BeginBinaryImportAsync(copySql, ct))
             {
-                if (m.SourceKind.Equals("loader", StringComparison.OrdinalIgnoreCase))
+                await writer.StartRowAsync(ct);
+                foreach (var m in map)
                 {
-                    if (m.SourceColumn.Equals("as_of_date", StringComparison.OrdinalIgnoreCase))
-                        await writer.WriteAsync(asOf, NpgsqlDbType.Date, ct);
-                    else
-                        await writer.WriteAsync(GetLoaderValueText(key, asOf, m.SourceColumn, isIntraday: true, accountFromJson, msgRequestId), NpgsqlDbType.Text, ct);
+                    if (m.SourceKind.Equals("loader", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (m.SourceColumn.Equals("as_of_date", StringComparison.OrdinalIgnoreCase))
+                            await writer.WriteAsync(asOf, NpgsqlDbType.Date, ct);
+                        else
+                            await writer.WriteAsync(GetLoaderValueText(key, asOf, m.SourceColumn, isIntraday: true, accountFromJson, msgRequestId), NpgsqlDbType.Text, ct);
+                    }
+                    else // json
+                    {
+                        var val = GetJsonTextOrNull(j, m.SourceColumn);
+                        await writer.WriteAsync(val, NpgsqlDbType.Text, ct);
+                    }
                 }
-                else // json
-                {
-                    var val = GetJsonTextOrNull(j, m.SourceColumn);
-                    await writer.WriteAsync(val, NpgsqlDbType.Text, ct);
-                }
+                await writer.CompleteAsync(ct);
             }
-            await writer.CompleteAsync(ct);
+
+            log.Information("[INBOUND AFTER] Intraday persisted → entity={EntityType}/{EntityName}, account={Account}, as_of={AsOf}",
+                   key.entityType, key.entityName, accountFromJson, asOf);
         }
-
-        log.Information("[INBOUND AFTER] Intraday persisted → entity={EntityType}/{EntityName}, account={Account}, as_of={AsOf}",
-               key.entityType, key.entityName, accountFromJson, asOf);
-
+        finally
+        {
+            // reset to default
+            await using var resetTimeout = new NpgsqlCommand("SET statement_timeout = DEFAULT;", conn);
+            await resetTimeout.ExecuteNonQueryAsync(ct);
+        }
     }
 
     public async Task CallUpsertIntradayAsync(string json, SubscriptionKey key, DateOnly asOf, string msgRequestId, Serilog.ILogger log, CancellationToken ct)
@@ -233,6 +260,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
         call.Parameters.Add("p_as_of_date", NpgsqlDbType.Date).Value = asOf;
         call.Parameters.AddWithValue("p_account_id_intraday", (object?)accountFromJson ?? DBNull.Value);
         call.Parameters.AddWithValue("p_load_bb_entity_name", key.entityName);
+        call.CommandTimeout = 120; // 2 minutes timeout
         await call.ExecuteNonQueryAsync(ct);
 
         log.Information("[UPSERT AFTER] Intraday complete → entity={EntityType}/{EntityName}, account={Account}, as_of={AsOf}",
