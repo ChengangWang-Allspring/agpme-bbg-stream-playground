@@ -33,12 +33,19 @@
                  HorizontalScrollbar="true"
                  FixedHeader="true"
                  Height="calc(100vh - 280px)"
-                 RowClick="OnRowClick">
+                 RowClick="OnRowClick"
+                 QuickFilter="QuickFilterFn">
 
         <ToolBarContent>
             <MudText Typo="Typo.subtitle2">Rows: @_rows.Count</MudText>
             <MudSpacer />
-            @* You can add a quick filter field here later if you want *@
+            <MudTextField @bind-Value="_search"
+                          Placeholder="Search (domain, source/target columns, data type, comments, kind)"
+                          Immediate="true"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Class="minw-320" />
         </ToolBarContent>
 
         <!-- Optional: explicit column widths via <ColGroup> for extra stability -->
@@ -201,6 +208,7 @@
 
 @code {
     private List<InboundColsMapRow> _rows = new();
+    private string? _search;
 
     protected override async Task OnInitializedAsync() => await Reload();
 
@@ -241,5 +249,21 @@
             await Edit(args.Item);
         }
     }
+
+
+    private bool QuickFilterFn(InboundColsMapRow r)
+    {
+        if (string.IsNullOrWhiteSpace(_search))
+            return true;
+
+        var s = _search.Trim();
+        return (r.domain?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (r.source_kind?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (r.source_column?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (r.target_column?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (r.data_type?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (r.comments?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
 
 }

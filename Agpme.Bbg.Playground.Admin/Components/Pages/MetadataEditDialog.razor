@@ -3,36 +3,47 @@
 @inject SubscriptionsClient Api
 @inject ISnackbar Snackbar
 
-<MudDialog>
+<MudDialog ContentStyle="max-height: calc(100vh - 160px); overflow-y: auto;">
     <TitleContent>Edit @Row.map_id</TitleContent>
+
     <DialogContent>
         <MudGrid>
+
             <MudItem xs="12" sm="6">
-                <MudTextField @bind-Value="_domain"       Label="domain" />
-                <MudTextField @bind-Value="_sourceKind"   Label="source_kind" />
+                <MudTextField @bind-Value="_domain" Label="domain" />
+                <MudTextField @bind-Value="_sourceKind" Label="source_kind" />
                 <MudTextField @bind-Value="_sourceColumn" Label="source_column" />
                 <MudTextField @bind-Value="_targetColumn" Label="target_column" />
-                <MudTextField @bind-Value="_dataType"     Label="data_type" />
+                <MudTextField @bind-Value="_dataType" Label="data_type" />
                 <MudSwitch T="bool" @bind-Checked="_isActive">active</MudSwitch>
                 <MudSwitch T="bool" @bind-Checked="_isRequired">required</MudSwitch>
-                <MudTextField @bind-Value="_comments"     Label="comments" Lines="3" />
+                <MudTextField @bind-Value="_comments" Label="comments" Lines="3"
+                              InputStyle="resize: vertical; min-height: 72px;" />
             </MudItem>
+
             <MudItem xs="12" sm="6">
-                <MudTextField @bind-Value="_defaultExpr"   Label="default_expr" Lines="3" />
-                <MudTextField @bind-Value="_transformExpr" Label="transform_expr" Lines="6" />
-                <MudTextField @bind-Value="_updateSetExpr" Label="update_set_expr" Lines="6" />
+                <MudTextField @bind-Value="_defaultExpr" Label="default_expr" Lines="4"
+                              InputStyle="resize: vertical; min-height: 96px;" />
+                <!-- Make transform_expr tall and user-resizable -->
+                <MudTextField @bind-Value="_transformExpr" Label="transform_expr" Lines="12"
+                              InputStyle="resize: vertical; min-height: 220px;" />
+                <MudTextField @bind-Value="_updateSetExpr" Label="update_set_expr" Lines="8"
+                              InputStyle="resize: vertical; min-height: 160px;" />
+
                 <MudStack Row Spacing="2" Class="mt-2">
                     <MudButton Variant="Variant.Outlined" OnClick="Validate">Validate</MudButton>
                     @if (!string.IsNullOrWhiteSpace(_validationMsg))
                     {
-                        <MudChip T="string" Color="@( _validationOk ? Color.Success : Color.Error )" Variant="Variant.Filled">
+                        <MudChip T="string" Color="@(_validationOk ? Color.Success : Color.Error)" Variant="Variant.Filled">
                             @_validationMsg
                         </MudChip>
                     }
                 </MudStack>
             </MudItem>
+
         </MudGrid>
     </DialogContent>
+
     <DialogActions>
         <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
         <MudButton Color="Color.Primary" OnClick="Save">Save</MudButton>
