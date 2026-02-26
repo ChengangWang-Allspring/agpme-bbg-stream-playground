@@ -30,7 +30,10 @@
                  Bordered="true"
                  AutoGenerateColumns="false"
                  ColumnResizeMode="ResizeMode.Column"
-                 HorizontalScrollbar="true">
+                 HorizontalScrollbar="true"
+                 FixedHeader="true"
+                 Height="calc(100vh - 280px)"
+                 RowClick="OnRowClick">
 
         <ToolBarContent>
             <MudText Typo="Typo.subtitle2">Rows: @_rows.Count</MudText>
@@ -228,4 +231,15 @@
         var res = await dlg.Result;
         if (!res.Canceled) await Reload();
     }
+
+
+    private async Task OnRowClick(DataGridRowClickEventArgs<InboundColsMapRow> args)
+    {
+        // MouseEventArgs.Detail: 1 = single-click, 2 = double-click
+        if (args?.MouseEventArgs?.Detail >= 2 && args.Item is not null)
+        {
+            await Edit(args.Item);
+        }
+    }
+
 }
