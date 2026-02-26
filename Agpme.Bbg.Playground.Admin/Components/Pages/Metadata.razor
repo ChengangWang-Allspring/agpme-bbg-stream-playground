@@ -15,34 +15,186 @@
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Resync">Resync from DEV</MudButton>
     </MudStack>
 
-    <MudTable Items="_rows" Hover="true" Dense="true" Class="mt-4">
-        <HeaderContent>
-            <MudTh>map_id</MudTh>
-            <MudTh>source_kind</MudTh>
-            <MudTh>source_column</MudTh>
-            <MudTh>target_column</MudTh>
-            <MudTh>data_type</MudTh>
-            <MudTh>active</MudTh>
-            <MudTh>required</MudTh>
-            <MudTh>action</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd>@context.map_id</MudTd>
-            <MudTd>@context.source_kind</MudTd>
-            <MudTd>@context.source_column</MudTd>
-            <MudTd>@context.target_column</MudTd>
-            <MudTd>@context.data_type</MudTd>
-            <MudTd>@context.is_active</MudTd>
-            <MudTd>@context.is_required</MudTd>
-            <MudTd>
-                <MudButton Size="Size.Small" OnClick="@(() => Edit(context))" StartIcon="@Icons.Material.Filled.Edit">Edit</MudButton>
-            </MudTd>
-        </RowTemplate>
+    <!-- We let the grid manage horizontal scrolling and force its inner table to size-to-content -->
+    <MudDataGrid T="InboundColsMapRow"
+                 Class="mt-4 inbound-map-grid"
+                 Items="_rows"
+                 Elevation="1"
+                 Dense="true"
+                 Hover="true"
+                 Filterable="true"
+                 Groupable="true"
+                 CanMultiSort="true"
+                 ShowToolbar="true"
+                 ShowColumnOptions="true"
+                 Bordered="true"
+                 AutoGenerateColumns="false"
+                 ColumnResizeMode="ResizeMode.Column"
+                 HorizontalScrollbar="true">
+
+        <ToolBarContent>
+            <MudText Typo="Typo.subtitle2">Rows: @_rows.Count</MudText>
+            <MudSpacer />
+            @* You can add a quick filter field here later if you want *@
+        </ToolBarContent>
+
+        <!-- Optional: explicit column widths via <ColGroup> for extra stability -->
+        <ColGroup>
+            <col style="width:120px" />  @* map_id *@
+            <col style="width:160px" />  @* domain *@
+            <col style="width:160px" />  @* source_kind *@
+            <col style="width:220px" />  @* source_column *@
+            <col style="width:220px" />  @* target_column *@
+            <col style="width:140px" />  @* data_type *@
+            <col style="width:120px" />  @* is_active *@
+            <col style="width:120px" />  @* is_required *@
+            <col style="width:420px" />  @* default_expr *@
+            <col style="width:480px" />  @* transform_expr *@
+            <col style="width:420px" />  @* update_set_expr *@
+            <col style="width:280px" />  @* comments *@
+            <col style="width:170px" />  @* created_at *@
+            <col style="width:160px" />  @* created_by *@
+            <col style="width:170px" />  @* updated_at *@
+            <col style="width:160px" />  @* updated_by *@
+            <col style="width:140px" />  @* action *@
+        </ColGroup>
+
+        <Columns>
+            <!-- Identity -->
+            <PropertyColumn T="InboundColsMapRow" TProperty="long"
+                            Title="map_id"
+                            Property="x => x.map_id"
+                            Sortable="true" />
+
+            <!-- Domain & Kind -->
+            <PropertyColumn T="InboundColsMapRow" TProperty="string"
+                            Title="domain" Property="x => x.domain"
+                            Sortable="true" />
+            <PropertyColumn T="InboundColsMapRow" TProperty="string"
+                            Title="source_kind" Property="x => x.source_kind"
+                            Sortable="true" />
+
+            <!-- Source/Target -->
+            <PropertyColumn T="InboundColsMapRow" TProperty="string"
+                            Title="source_column" Property="x => x.source_column"
+                            Sortable="true" />
+            <PropertyColumn T="InboundColsMapRow" TProperty="string"
+                            Title="target_column" Property="x => x.target_column"
+                            Sortable="true" />
+            <PropertyColumn T="InboundColsMapRow" TProperty="string"
+                            Title="data_type" Property="x => x.data_type"
+                            Sortable="true" />
+
+            <!-- Flags -->
+            <PropertyColumn T="InboundColsMapRow" TProperty="bool"
+                            Title="is_active" Property="x => x.is_active"
+                            Sortable="true" />
+            <PropertyColumn T="InboundColsMapRow" TProperty="bool"
+                            Title="is_required" Property="x => x.is_required"
+                            Sortable="true" />
+
+            <!-- Expressions (truncate + tooltip) -->
+            <TemplateColumn T="InboundColsMapRow" Title="default_expr">
+                <CellTemplate Context="ctx">
+                    @if (!string.IsNullOrWhiteSpace(ctx.Item.default_expr))
+                    {
+                        <MudTooltip Text="@ctx.Item.default_expr">
+                            <div class="ellipsis" title="@ctx.Item.default_expr">
+                                @ctx.Item.default_expr
+                            </div>
+                        </MudTooltip>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+
+            <TemplateColumn T="InboundColsMapRow" Title="transform_expr">
+                <CellTemplate Context="ctx">
+                    @if (!string.IsNullOrWhiteSpace(ctx.Item.transform_expr))
+                    {
+                        <MudTooltip Text="@ctx.Item.transform_expr">
+                            <div class="ellipsis" title="@ctx.Item.transform_expr">
+                                @ctx.Item.transform_expr
+                            </div>
+                        </MudTooltip>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+
+            <TemplateColumn T="InboundColsMapRow" Title="update_set_expr">
+                <CellTemplate Context="ctx">
+                    @if (!string.IsNullOrWhiteSpace(ctx.Item.update_set_expr))
+                    {
+                        <MudTooltip Text="@ctx.Item.update_set_expr">
+                            <div class="ellipsis" title="@ctx.Item.update_set_expr">
+                                @ctx.Item.update_set_expr
+                            </div>
+                        </MudTooltip>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+
+            <!-- Comments -->
+            <PropertyColumn T="InboundColsMapRow" TProperty="string"
+                            Title="comments" Property="x => x.comments" />
+
+            <!-- Audit -->
+            <TemplateColumn T="InboundColsMapRow" Title="created_at">
+                <CellTemplate Context="ctx">
+                    @ctx.Item.created_at.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                </CellTemplate>
+            </TemplateColumn>
+
+            <PropertyColumn T="InboundColsMapRow" TProperty="string"
+                            Title="created_by" Property="x => x.created_by"
+                            Sortable="true" />
+
+            <TemplateColumn T="InboundColsMapRow" Title="updated_at">
+                <CellTemplate Context="ctx">
+                    @ctx.Item.updated_at.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                </CellTemplate>
+            </TemplateColumn>
+
+            <PropertyColumn T="InboundColsMapRow" TProperty="string"
+                            Title="updated_by" Property="x => x.updated_by"
+                            Sortable="true" />
+
+            <!-- Action -->
+            <TemplateColumn T="InboundColsMapRow" Title="action">
+                <CellTemplate Context="ctx">
+                    <MudButton Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Edit"
+                               OnClick="@(async () => await Edit(ctx.Item))">
+                        Edit
+                    </MudButton>
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+
         <NoRecordsContent>
             <MudText>No metadata rows found.</MudText>
         </NoRecordsContent>
-    </MudTable>
+    </MudDataGrid>
 </MudPaper>
+
+<style>
+    /* Keep this scoped to this page to avoid side effects on other grids */
+    .inbound-map-grid .mud-table-container {
+        overflow-x: auto !important; /* ensure horizontal scrollbar can appear without vertical-bottom trick */
+    }
+
+    .inbound-map-grid .mud-table {
+        width: max-content; /* table grows to content width (sum of col widths) */
+        min-width: 100%;
+    }
+
+    .ellipsis {
+        max-width: 420px;
+        white-space: nowrap;
+        overflow: hidden; /* use full overflow to be safe across browsers */
+        text-overflow: ellipsis;
+        display: block;
+    }
+</style>
 
 @code {
     private List<InboundColsMapRow> _rows = new();
@@ -51,14 +203,14 @@
 
     private async Task Reload()
     {
-        _rows = await Api.GetInboundColsMapAsync() ?? new();
+        _rows = await Api.GetInboundColsMapAsync() ?? new(); // GET /client/metadata/inbound-cols-map
     }
 
     private async Task Resync()
     {
         try
         {
-            var n = await Api.ResyncInboundColsMapAsync();
+            var n = await Api.ResyncInboundColsMapAsync(); // POST /client/metadata/inbound-cols-map/resync
             Snackbar.Add($"Resync complete. Rows: {n}.", Severity.Success);
             await Reload();
         }
