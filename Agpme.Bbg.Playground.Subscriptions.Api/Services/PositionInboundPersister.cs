@@ -86,6 +86,7 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
             "load_process" => "playground-client",
             "msg_request_id" => msgRequestId,
             "is_intraday" => isIntraday ? "true" : "false",
+            "load_status" => isIntraday ? "UPDATE" : "NEW",
             "account" or "account_id" => accountFromJson,
             _ => null
         };

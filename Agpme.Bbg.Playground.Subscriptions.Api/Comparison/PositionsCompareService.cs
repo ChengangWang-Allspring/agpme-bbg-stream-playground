@@ -128,13 +128,13 @@ public sealed class PositionsCompareService : IPositionsCompareService
     // Resolve the PROD connection string via StreamAwsSecrets + shared AWS helper
     private async Task<string> GetProdConnectionStringAsync(CancellationToken ct)
     {
-        var region = _cfg["StreamAwsSecrets:Region"]
-            ?? throw new InvalidOperationException("StreamAwsSecrets:Region is required.");
-        var arn = _cfg["StreamAwsSecrets:Arn"]
-            ?? throw new InvalidOperationException("StreamAwsSecrets:Arn is required.");
-        var keyName = _cfg["StreamAwsSecrets:SecretKeyName"]
-            ?? throw new InvalidOperationException("StreamAwsSecrets:SecretKeyName is required.");
-        var profile = _cfg["StreamAwsSecrets:Profile"]; // optional
+        var region = _cfg["ProdAwsSecrets:Region"]
+            ?? throw new InvalidOperationException("ProdAwsSecrets:Region is required.");
+        var arn = _cfg["ProdAwsSecrets:Arn"]
+            ?? throw new InvalidOperationException("ProdAwsSecrets:Arn is required.");
+        var keyName = _cfg["ProdAwsSecrets:KeyName"]
+            ?? throw new InvalidOperationException("StreamAwsSecrets:KeyName is required.");
+        var profile = _cfg["ProdAwsSecrets:Profile"]; // optional
 
         var cs = await Allspring.Agpme.Bbg.TestsShared.Helpers.Aws.AwsSecretHelper
             .GetSecretValueAsync(profile, region, arn, keyName, ct);

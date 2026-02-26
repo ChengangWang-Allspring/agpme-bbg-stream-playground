@@ -22,8 +22,8 @@ public static class ServiceCollectionExtensions
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AwsSecretsOptions>>().Value;
             if (string.IsNullOrWhiteSpace(opts.Arn))
                 throw new InvalidOperationException("StreamAwsSecrets:Arn is required.");
-            if (string.IsNullOrWhiteSpace(opts.SecretKeyName))
-                throw new InvalidOperationException("StreamAwsSecrets:SecretKeyName is required.");
+            if (string.IsNullOrWhiteSpace(opts.KeyName))
+                throw new InvalidOperationException("StreamAwsSecrets:KeyName is required.");
             if (string.IsNullOrWhiteSpace(opts.Region))
                 throw new InvalidOperationException("StreamAwsSecrets:Region is required.");
 
@@ -32,7 +32,7 @@ public static class ServiceCollectionExtensions
                 opts.Profile,              // profile or null
                 opts.Region!,              // required
                 opts.Arn!,                 // secretId
-                opts.SecretKeyName!        // valueKey in SecretString JSON
+                opts.KeyName!        // valueKey in SecretString JSON
             );
 
             return connString;
