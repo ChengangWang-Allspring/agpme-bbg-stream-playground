@@ -3,6 +3,7 @@
 @using Agpme.Bbg.Playground.Admin.Services
 @inject CompareClient CompareApi
 @inject ISnackbar Snackbar
+@inject SubscriptionsClient SubsApi
 
 <PageTitle>Compare</PageTitle>
 
@@ -16,9 +17,17 @@
     <MudForm Class="mt-4">
         <!-- Entity / AsOf -->
         <MudStack Row="true" Spacing="2">
-            <MudSelect T="string" Label="Entity Type" @bind-Value="_req.entityType" Dense="true" Style="width: 180px;">
-                <MudSelectItem Value="@("accounts")">accounts</MudSelectItem>
-                <MudSelectItem Value="@("groups")">groups</MudSelectItem>
+            <MudSelect T="string" Label="Entity Type" @bind-Value="_req.entityType" Dense="true" Style="width: 180px;" 
+                @onchange="@(e => OnEntityTypeChanged(e?.Value?.ToString() ?? "groups"))">
+            <MudSelectItem Value="@("accounts")">accounts</MudSelectItem>
+            <MudSelectItem Value="@("groups")">groups</MudSelectItem>
+        </MudSelect>
+
+            <MudSelect T="string" Label="Entity Name" @bind-Value="_req.entityName" Dense="true" Style="min-width: 260px;">
+                @foreach (var n in _entityNames)
+                {
+                    <MudSelectItem Value="@n">@n</MudSelectItem>
+                }
             </MudSelect>
             <MudTextField Label="Entity Name" @bind-Value="_req.entityName" Margin="Margin.Dense" Style="min-width: 260px;" />
             <MudDatePicker @bind-Date="_asOfPick" Label="As-of" DateFormat="yyyy-MM-dd" Margin="Margin.Dense" Clearable="true" />
@@ -171,10 +180,19 @@
     private HashSet<string> _phase2Sel = new(StringComparer.Ordinal);
     private HashSet<string> _excludedSel = new(StringComparer.Ordinal);
 
+
+    private List<Target> _targets = new();
+    private List<string> _entityNames = new();
+
+
     protected override async Task OnInitializedAsync()
     {
         await LoadOptions();
-        ResetForm();
+
+        // Load configured targets from Subscriptions API
+        _targets = await SubsApi.GetTargetsAsync() ?? new();
+
+        ResetForm();        // <-- will set defaults (type/names)
     }
 
     private async Task LoadOptions()
@@ -184,6 +202,34 @@
         StateHasChanged();
     }
 
+    // Utility: (re)build the entity-name list for the current type
+    private void RebuildEntityNames()
+    {
+        var type = string.IsNullOrWhiteSpace(_req.entityType) ? "groups" : _req.entityType;
+        _entityNames = _targets
+            .Where(t => string.Equals(t.entityType, type, StringComparison.OrdinalIgnoreCase))
+            .Select(t => t.entityName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // If current name is not in the list, pick first (or blank if none)
+        if (_entityNames.Count == 0)
+        {
+            _req.entityName = "";
+        }
+        else if (!_entityNames.Contains(_req.entityName, StringComparer.OrdinalIgnoreCase))
+        {
+            _req.entityName = _entityNames[0];
+        }
+    }
+
+    // React to user switching accounts/groups
+    private void OnEntityTypeChanged(string newType)
+    {
+        _req.entityType = newType;
+        RebuildEntityNames();
+    }
 
     private void OnPhase1Changed(IEnumerable<string> values)
         => _phase1Sel = values is HashSet<string> hs ? hs : new HashSet<string>(values, StringComparer.Ordinal);
@@ -198,10 +244,11 @@
     private void ResetForm()
     {
         _mode = "OneStep";
-        _req.entityType = "accounts";
-        _req.entityName = "";
+        _req.entityType = "groups";
+        RebuildEntityNames();
+        _req.entityName = _entityNames.FirstOrDefault() ?? "";
         _asOfPick = DateTime.Today;
-        _req.expectedSource = "csv";
+        _req.expectedSource = "db-history";
         _req.expectedCsvPath = null;
         _req.oneStepMode = true;
         _req.twoStepsMode = false;
