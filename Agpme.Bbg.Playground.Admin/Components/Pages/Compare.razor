@@ -1,0 +1,253 @@
+﻿@page "/compare"
+@using Agpme.Bbg.Playground.Admin.Models
+@using Agpme.Bbg.Playground.Admin.Services
+@inject CompareClient CompareApi
+@inject ISnackbar Snackbar
+
+<PageTitle>Compare</PageTitle>
+
+<MudPaper Class="pa-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudText Typo="Typo.h5">Compare Positions</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Outlined" OnClick="LoadOptions">Reload Options</MudButton>
+    </MudStack>
+
+    <MudForm Class="mt-4">
+        <!-- Entity / AsOf -->
+        <MudStack Row="true" Spacing="2">
+            <MudSelect T="string" Label="Entity Type" @bind-Value="_req.entityType" Dense="true" Style="width: 180px;">
+                <MudSelectItem Value="@("accounts")">accounts</MudSelectItem>
+                <MudSelectItem Value="@("groups")">groups</MudSelectItem>
+            </MudSelect>
+            <MudTextField Label="Entity Name" @bind-Value="_req.entityName" Margin="Margin.Dense" Style="min-width: 260px;" />
+            <MudDatePicker @bind-Date="_asOfPick" Label="As-of" DateFormat="yyyy-MM-dd" Margin="Margin.Dense" Clearable="true" />
+        </MudStack>
+
+        <!-- Expected source -->
+        <MudStack Row="true" Spacing="2" Class="mt-3">
+            <MudSelect T="string" Label="Expected Source" @bind-Value="_req.expectedSource" Dense="true" Style="width: 220px;">
+                <MudSelectItem Value="@("csv")">csv (baseline)</MudSelectItem>
+                <MudSelectItem Value="@("db-history")">db-history (local)</MudSelectItem>
+                <MudSelectItem Value="@("external-db")">external-db</MudSelectItem>
+            </MudSelect>
+
+            @if (_req.expectedSource == "csv")
+            {
+                <MudTextField Label="Expected CSV Path" @bind-Value="_req.expectedCsvPath" Margin="Margin.Dense" Style="min-width: 420px;"
+                              Placeholder="C:\path\to\expected.csv" />
+            }
+        </MudStack>
+
+        <!-- Mode -->
+        <MudStack Row="true" Spacing="2" Class="mt-3" AlignItems="AlignItems.Center">
+            <MudRadioGroup T="string" @bind-Value="_mode">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                    <MudRadio T="string" Value="@("OneStep")">One-Step</MudRadio>
+                    <MudRadio T="string" Value="@("TwoSteps")">Two-Steps</MudRadio>
+                </MudStack>
+            </MudRadioGroup>
+
+            <MudSwitch T="bool" @bind-Value="_req.useAllFields" Label="Use All Fields (implies One-Step)" />
+            <MudSwitch T="bool" @bind-Value="_req.stringCaseInsensitive" Label="Case-insensitive strings" />
+            <MudNumericField @bind-Value="_req.numericTolerance" Label="Numeric tolerance" Margin="Margin.Dense" Style="width: 180px;" />
+        </MudStack>
+
+        <!-- Advanced options -->
+        <MudExpansionPanels Class="mt-3">
+            <MudExpansionPanel Text="Advanced field sets (optional)">
+                <MudText Typo="Typo.caption">If empty, library defaults apply. Use CTRL/CMD for multi-select.</MudText>
+                <MudStack Row="true" Spacing="2" Class="mt-2">
+                    <MudSelect T="string"
+                               Label="Phase1 Fields"
+                               MultiSelection="true"
+                               SelectedValues="_phase1Sel"
+                               SelectedValuesChanged="OnPhase1Changed"
+                               Dense="true"
+                               Style="min-width: 340px;">
+                        @foreach (var f in _defaults?.phase1 ?? Array.Empty<string>())
+                        {
+                            <MudSelectItem Value="@f">@f</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    @if (_mode == "TwoSteps")
+                    {
+                        <MudSelect T="string"
+                                   Label="Phase2 Fields"
+                                   MultiSelection="true"
+                                   SelectedValues="_phase2Sel"
+                                   SelectedValuesChanged="OnPhase2Changed"
+                                   Dense="true"
+                                   Style="min-width: 340px;">
+                            @foreach (var f in _defaults?.phase2 ?? Array.Empty<string>())
+                            {
+                                <MudSelectItem Value="@f">@f</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+
+                    <MudSelect T="string"
+                               Label="Excluded Fields"
+                               MultiSelection="true"
+                               SelectedValues="_excludedSel"
+                               SelectedValuesChanged="OnExcludedChanged"
+                               Dense="true"
+                               Style="min-width: 340px;">
+                        @foreach (var f in _defaults?.excluded ?? Array.Empty<string>())
+                        {
+                            <MudSelectItem Value="@f">@f</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                </MudStack>
+            </MudExpansionPanel>
+
+            <MudExpansionPanel Text="Key Order (read-only)">
+                <MudChipSet T="string" ReadOnly="true">
+                    @foreach (var k in _keyOrder)
+                    {
+                        <MudChip T="string" Color="Color.Default" Variant="Variant.Outlined">@k</MudChip>
+                    }
+                </MudChipSet>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+
+        <!-- Output -->
+        <MudStack Row="true" Spacing="2" Class="mt-3">
+            <MudSelect T="string" Label="Save policy" @bind-Value="_req.savePolicy" Dense="true" Style="width: 200px;">
+                <MudSelectItem Value="@("OnFailure")">OnFailure</MudSelectItem>
+                <MudSelectItem Value="@("Always")">Always</MudSelectItem>
+                <MudSelectItem Value="@("Never")">Never</MudSelectItem>
+            </MudSelect>
+            <MudTextField Label="Output root (optional)" @bind-Value="_req.outputRoot" Margin="Margin.Dense" Style="min-width: 420px;"
+                          Placeholder="(default artifacts/compare/...)" />
+        </MudStack>
+
+        <MudStack Row="true" Spacing="2" Class="mt-4">
+            <MudButton Color="Color.Primary" OnClick="RunCompare">Run</MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="ResetForm">Reset</MudButton>
+        </MudStack>
+    </MudForm>
+
+    <!-- Result -->
+    @if (_result != null)
+    {
+        <MudDivider Class="my-4" />
+        @if (_result.success)
+        {
+            <MudAlert Severity="Severity.Success" Variant="Variant.Filled">
+                ✅ Success — expected=@_result.expectedCount, actual=@_result.actualCount
+            </MudAlert>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled">
+                <div style="white-space: pre-wrap">@_result.message</div>
+            </MudAlert>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_result.outputDir))
+        {
+            <MudText Typo="Typo.subtitle2" Class="mt-2">Artifacts</MudText>
+            <MudText Typo="Typo.body2">Output: @_result.outputDir</MudText>
+            <MudText Typo="Typo.caption">Open the folder to view <code>phase1/expected.csv</code> / <code>phase1/actual.csv</code> (and phase2 if applicable).</MudText>
+        }
+    }
+</MudPaper>
+
+@code {
+    private CompareOptions? _options;
+    private CompareOptions.Defaults? _defaults => _options?.defaults;
+    private string[] _keyOrder = Array.Empty<string>();
+
+    private readonly CompareRequestDto _req = new();
+    private CompareResponseDto? _result;
+    private DateTime? _asOfPick;
+    private string _mode = "OneStep"; // "OneStep" | "TwoSteps"
+
+    // Multi-select tracked lists
+    private HashSet<string> _phase1Sel = new(StringComparer.Ordinal);
+    private HashSet<string> _phase2Sel = new(StringComparer.Ordinal);
+    private HashSet<string> _excludedSel = new(StringComparer.Ordinal);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOptions();
+        ResetForm();
+    }
+
+    private async Task LoadOptions()
+    {
+        _options = await CompareApi.GetOptionsAsync();
+        _keyOrder = _options?.keyOrder ?? Array.Empty<string>();
+        StateHasChanged();
+    }
+
+
+    private void OnPhase1Changed(IEnumerable<string> values)
+        => _phase1Sel = values is HashSet<string> hs ? hs : new HashSet<string>(values, StringComparer.Ordinal);
+
+    private void OnPhase2Changed(IEnumerable<string> values)
+        => _phase2Sel = values is HashSet<string> hs ? hs : new HashSet<string>(values, StringComparer.Ordinal);
+
+    private void OnExcludedChanged(IEnumerable<string> values)
+        => _excludedSel = values is HashSet<string> hs ? hs : new HashSet<string>(values, StringComparer.Ordinal);
+
+
+    private void ResetForm()
+    {
+        _mode = "OneStep";
+        _req.entityType = "accounts";
+        _req.entityName = "";
+        _asOfPick = DateTime.Today;
+        _req.expectedSource = "csv";
+        _req.expectedCsvPath = null;
+        _req.oneStepMode = true;
+        _req.twoStepsMode = false;
+        _req.useAllFields = true;
+        _req.stringCaseInsensitive = false;
+        _req.numericTolerance = _defaults?.numericTolerance ?? 0.00001m;
+        _req.savePolicy = "OnFailure";
+        _req.outputRoot = null;
+
+        // Start with no overrides (library defaults will apply)
+        _phase1Sel.Clear();
+        _phase2Sel.Clear();
+        _excludedSel = new HashSet<string>(_defaults?.excluded ?? Array.Empty<string>(), StringComparer.Ordinal);
+
+        _result = null;
+    }
+
+    private async Task RunCompare()
+    {
+        if (string.IsNullOrWhiteSpace(_req.entityName))
+        {
+            Snackbar.Add("Entity name is required.", Severity.Error);
+            return;
+        }
+
+        _req.asOfDate = (_asOfPick ?? DateTime.Today).ToString("yyyy-MM-dd");
+        _req.oneStepMode = (_mode == "OneStep") || _req.useAllFields;
+        _req.twoStepsMode = (_mode == "TwoSteps");
+
+        _req.phase1Fields = _phase1Sel.Count > 0 ? _phase1Sel : null;
+        _req.phase2Fields = _mode == "TwoSteps" && _phase2Sel.Count > 0 ? _phase2Sel : null;
+        _req.excludedFields = _excludedSel.Count > 0 ? _excludedSel : null;
+
+        try
+        {
+            _result = await CompareApi.RunAsync(_req);
+            if (_result is null)
+                Snackbar.Add("No response from server.", Severity.Error);
+            else if (_result.success)
+                Snackbar.Add("Compare OK.", Severity.Success);
+            else
+                Snackbar.Add("Compare failed. See details below.", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Compare error: {ex.Message}", Severity.Error);
+        }
+    }
+}

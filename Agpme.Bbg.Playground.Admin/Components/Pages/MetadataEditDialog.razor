@@ -24,17 +24,17 @@
                 <MudSwitch T="bool" @bind-Value="_isActive" Label="active" />
                 <MudSwitch T="bool" @bind-Value="_isRequired" Label="required" />
                 <MudTextField @bind-Value="_comments" Label="comments" Lines="3"
-                              InputStyle="resize: vertical; min-height: 72px;" />
+                              Style="resize: vertical; min-height: 72px;" />
             </MudItem>
 
             <MudItem xs="12" sm="6">
                 <MudTextField @bind-Value="_defaultExpr" Label="default_expr" Lines="4"
-                              InputStyle="resize: vertical; min-height: 96px;" />
+                              Style="resize: vertical; min-height: 96px;" />
                 <!-- Make transform_expr tall and user-resizable -->
                 <MudTextField @bind-Value="_transformExpr" Label="transform_expr" Lines="12"
-                              InputStyle="resize: vertical; min-height: 220px;" />
+                              Style="resize: vertical; min-height: 220px;" />
                 <MudTextField @bind-Value="_updateSetExpr" Label="update_set_expr" Lines="8"
-                              InputStyle="resize: vertical; min-height: 160px;" />
+                              Style="resize: vertical; min-height: 160px;" />
 
                 <MudStack Row Spacing="2" Class="mt-2">
                     <MudButton Variant="Variant.Outlined" OnClick="Validate">Validate</MudButton>

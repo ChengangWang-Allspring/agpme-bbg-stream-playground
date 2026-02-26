@@ -16,8 +16,11 @@
         <!-- DB status -->
         <MudChip T="string"
                  Color="@(_dbStatus == "online" ? Color.Success : Color.Error)"
-                 Variant="Variant.Filled"
-                 StartIcon="@(_dbStatus == "online" ? Icons.Material.Filled.Storage : Icons.Material.Filled.Warning)">
+                 Variant="Variant.Filled">
+            <MudIcon Icon="@(_dbStatus == "online"
+                     ? Icons.Material.Filled.Storage
+                     : Icons.Material.Filled.Warning)"
+                     Class="mr-1" />
             DB: @_dbStatus
         </MudChip>
         @if (!string.IsNullOrWhiteSpace(_dbError) && _dbStatus != "online")
@@ -26,16 +29,14 @@
         }
         <!-- As‑of group (picker + Apply kept together) -->
         <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-            <MudDatePicker T="DateTime?"
-                           @bind-Date="_pickAsOf"
+            <MudDatePicker @bind-Date="_pickAsOf"
                            DateFormat="yyyy-MM-dd"
                            Label="As‑of"
-                           DisableToolbar="true"
                            Variant="Variant.Outlined"
-                           Dense="true"
+                           Margin="Margin.Dense"
                            Clearable="true"
                            Placeholder="empty = today"
-                           Style="width: 320px;" />    @* ⬅ widen input so it doesn't clip *@
+                           Style="width: 320px;" />
             <MudButton Variant="Variant.Filled"
                        Color="Color.Default"
                        OnClick="ApplyAsOfAsync">
@@ -88,16 +89,20 @@
                 @if (context.Started)
                 {
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                        <MudChip T="string" Color="Color.Success" Variant="Variant.Filled"
-                                 StartIcon="@Icons.Material.Filled.PlayArrow">Started</MudChip>
+                        <MudChip T="string" Color="Color.Success" Variant="Variant.Filled">
+                            <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Class="mr-1" />
+                            Started
+                        </MudChip>
                         <MudProgressCircular Indeterminate="true"
                                              Size="Size.Small" Color="Color.Success" />
                     </MudStack>
                 }
                 else
                 {
-                    <MudChip T="string" Color="Color.Default" Variant="Variant.Outlined"
-                             StartIcon="@Icons.Material.Filled.Stop">Stopped</MudChip>
+                    <MudChip T="string" Color="Color.Default" Variant="Variant.Outlined">
+                        <MudIcon Icon="@Icons.Material.Filled.Stop" Class="mr-1" />
+                        Stopped
+                    </MudChip>
                 }
             </MudTd>
             <MudTd>@(context.LastMessageLocal ?? "-")</MudTd>

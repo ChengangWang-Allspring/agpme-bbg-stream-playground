@@ -1,6 +1,7 @@
 using Agpme.Bbg.Playground.Subscriptions.Api.Configuration;
 using Agpme.Bbg.Playground.Subscriptions.Api.Endpoints;
 using Agpme.Bbg.Playground.Subscriptions.Api.Services;
+using Agpme.Bbg.Playground.Subscriptions.Api.Comparison;
 using Serilog;
 
 
@@ -44,6 +45,8 @@ builder.Services.AddSingleton<ISubscriptionManager, SubscriptionManager>();
 builder.Services.AddSingleton<IPositionInboundPersister, PositionInboundPersister>();
 builder.Services.AddSingleton<ClientApi>();
 builder.Services.AddSingleton<IResetService, ResetService>();
+builder.Services.AddSingleton<IPositionsCompareService, PositionsCompareService>();
+
 
 var app = builder.Build();
 

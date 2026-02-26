@@ -18,6 +18,7 @@ builder.Services.AddHttpClient("subsapi", http =>
 
 // Register your typed services
 builder.Services.AddSingleton<SubscriptionsClient>();
+builder.Services.AddSingleton<CompareClient>();
 
 // Add services to the container.
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();

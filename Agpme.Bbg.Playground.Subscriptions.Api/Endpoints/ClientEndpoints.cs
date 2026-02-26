@@ -2,7 +2,9 @@
 using Agpme.Bbg.Playground.Subscriptions.Api.Models;
 using Agpme.Bbg.Playground.Subscriptions.Api.Services;
 using Allspring.Agpme.Bbg.TestsShared.Helpers.Postgres;
-using Npgsql;
+using Agpme.Bbg.Playground.Subscriptions.Api.Comparison;
+using Allspring.Agpme.Bbg.TestsShared.Comparison;
+
 
 namespace Agpme.Bbg.Playground.Subscriptions.Api.Endpoints;
 
@@ -183,6 +185,32 @@ public static class ClientEndpoints
                 }
 
                 return Results.Ok(new { ok = true });
+            });
+
+        app.MapGet("/client/compare/options", () =>
+        {
+            return Results.Ok(new
+            {
+                keyOrder = BbgCompareDefaults.KeyOrder,                                   
+                defaults = new
+                {
+                    phase1 = BbgCompareDefaults.Phase1Fields,
+                    phase2 = BbgCompareDefaults.Phase2Fields,
+                    excluded = BbgCompareDefaults.DefaultExcludedFields,
+                    numericExact = BbgCompareDefaults.DefaultNumericExactFields,
+                    numericTolerant = BbgCompareDefaults.DefaultNumericTolerantFields,
+                    numericTolerance = 1e-5m
+                }
+            });
+        });
+
+        app.MapPost("/client/compare/run",
+            async (IPositionsCompareService svc,
+                   Agpme.Bbg.Playground.Subscriptions.Api.Comparison.CompareRequest req,
+                   CancellationToken ct) =>
+            {
+                var resp = await svc.RunAsync(req, ct);
+                return Results.Ok(resp);
             });
 
         return app;
