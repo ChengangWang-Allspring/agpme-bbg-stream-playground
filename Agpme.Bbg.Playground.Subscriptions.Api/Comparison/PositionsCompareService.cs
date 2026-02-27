@@ -17,8 +17,9 @@ public sealed class PositionsCompareService : IPositionsCompareService
     {
         _cfg = cfg;
         _logger = logger;
-        _localCs = cfg.GetSection("ClientDb:ConnectionString").Value
-            ?? throw new InvalidOperationException("ClientDb:ConnectionString not configured.");
+        _localCs = cfg["ConnectionString_Local"]
+            ?? throw new InvalidOperationException("ConnectionString_Local not configured.");
+
     }
 
     public async Task<CompareResponse> RunAsync(CompareRequest req, CancellationToken ct)
@@ -33,10 +34,8 @@ public sealed class PositionsCompareService : IPositionsCompareService
         Directory.CreateDirectory(outputRoot);
 
         // 2) Load EXPECTED based on current/history only.
-        // Environment chosen by "StreamAwsSecrets:Profile" (uat/prod).
-
-        var prodCs = await GetProdConnectionStringAsync(ct);
-        await using var conn = new NpgsqlConnection(prodCs);
+        var targetCs = await GetTargetConnectionStringAsync(ct);
+        await using var conn = new NpgsqlConnection(targetCs);
         await conn.OpenAsync(ct);
 
         var q = new BbgPositionsDb.Query(asOf, req.entityName);
@@ -131,21 +130,21 @@ public sealed class PositionsCompareService : IPositionsCompareService
             new() { success = false, message = reason, outputDir = dir };
     }
 
-    // Resolve the PROD connection string via StreamAwsSecrets + shared AWS helper
-    private async Task<string> GetProdConnectionStringAsync(CancellationToken ct)
+    // Resolve the Target connection string via StreamAwsSecrets + shared AWS helper
+    private async Task<string> GetTargetConnectionStringAsync(CancellationToken ct)
     {
-        var region = _cfg["StreamAwsSecrets:Region"]
-            ?? throw new InvalidOperationException("StreamAwsSecrets:Region is required.");
-        var arn = _cfg["StreamAwsSecrets:Arn"]
-            ?? throw new InvalidOperationException("StreamAwsSecrets:Arn is required.");
-        var keyName = _cfg["StreamAwsSecrets:KeyName"]
-            ?? throw new InvalidOperationException("StreamAwsSecrets:KeyName is required.");
-        var profile = _cfg["StreamAwsSecrets:Profile"]; // optional
+        var env = _cfg["TargetEnvironment"] ?? "uat";
+        var sec = _cfg.GetSection($"TargetAwsSecrets_{env}");
+        var arn = sec["Arn"] ?? throw new InvalidOperationException("TargetAwsSecrets: Arn missing");
+        var keyName = sec["KeyName"] ?? throw new InvalidOperationException("TargetAwsSecrets: KeyName missing");
+        var region = sec["Region"] ?? throw new InvalidOperationException("TargetAwsSecrets: Region missing");
+        var profile = sec["Profile"]; // optional
 
         var cs = await Allspring.Agpme.Bbg.TestsShared.Helpers.Aws.AwsSecretHelper
             .GetSecretValueAsync(profile, region, arn, keyName, ct);
         if (string.IsNullOrWhiteSpace(cs))
-            throw new InvalidOperationException("Resolved PROD connection string is empty.");
+            throw new InvalidOperationException("Resolved target connection string is empty.");
         return cs;
     }
+
 }

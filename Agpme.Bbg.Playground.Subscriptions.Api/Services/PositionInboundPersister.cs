@@ -20,8 +20,9 @@ public sealed class PositionInboundPersister : IPositionInboundPersister
 
     public PositionInboundPersister(IConfiguration cfg)
     {
-        _cs = cfg.GetSection("ClientDb:ConnectionString").Value
-              ?? throw new InvalidOperationException("ClientDb:ConnectionString is not configured.");
+        _cs = cfg["ConnectionString_Local"]
+            ?? throw new InvalidOperationException("ConnectionString_Local not configured.");
+
     }
 
     private sealed record ColMap(string SourceColumn, string SourceKind);

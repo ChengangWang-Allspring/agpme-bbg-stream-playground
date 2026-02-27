@@ -11,7 +11,7 @@ public static class Bootstrap
         var compose = cfg["Docker:ComposeFile"]!;
         RunDockerCompose(["compose", "-f", compose, "up", "-d"]);
 
-        var cs = cfg["LocalPlaygroundDb:ConnectionString"]!;
+        var cs = cfg["ConnectionString_Local"]!;
         Console.WriteLine($"[INFO] Waiting for Postgres at {cs}");
 
         await WaitForDbAsync(cs, TimeSpan.FromMinutes(2));
@@ -22,7 +22,7 @@ public static class Bootstrap
 
     public static Task ApplySqlAsync(IConfiguration cfg)
     {
-        var cs = cfg["LocalPlaygroundDb:ConnectionString"]!;
+        var cs = cfg["ConnectionString_Local"]!;
         var folder = cfg["DbScripts:Folder"]!;
         return PostgresHelper.ApplySqlScriptsAsync(cs, folder, Console.WriteLine);
     }
@@ -37,7 +37,7 @@ public static class Bootstrap
             return;
         }
 
-        var destCs = cfg["LocalPlaygroundDb:ConnectionString"]!;
+        var destCs = cfg["ConnectionString_Local"]!; ;
         var truncate = bool.Parse(cfg["MetadataSync:TruncateBeforeCopy"]!);
 
         var tables = cfg.GetSection("MetadataSync:Tables")
@@ -49,10 +49,11 @@ public static class Bootstrap
         foreach (var t in tables) Console.WriteLine($"  - {t}");
 
         // Always use AWS secrets from MetadataAwsSecrets
-        var arn = cfg["MetadataAwsSecrets:Arn"]!;
-        var keyName = cfg["MetadataAwsSecrets:KeyName"]!;
-        var region = cfg["MetadataAwsSecrets:Region"]!;
-        var profile = cfg["MetadataAwsSecrets:Profile"]!;
+        var menv = cfg["MetadataEnvironment"] ?? "dev";
+        var msec = cfg.GetSection($"MetadataAwsSecrets_{menv}");
+        var arn = msec["Arn"]!; var keyName = msec["KeyName"]!;
+        var region = msec["Region"]!; 
+        var profile = msec["Profile"]!;
 
         Console.WriteLine($"[INFO] Retrieving source connection from AWS Secret: {arn}");
         var sourceCs = await AwsSecretHelper.GetSecretValueAsync(profile, region, arn, keyName);

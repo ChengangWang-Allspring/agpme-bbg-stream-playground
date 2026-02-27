@@ -5,8 +5,8 @@ public sealed class CompareRequest
     public string entityType { get; set; } = default!;   // "accounts" | "groups"
     public string entityName { get; set; } = default!;
     public string asOfDate { get; set; } = default!;     // yyyy-MM-dd
-    // expectedSource: "prod-current" | "prod-history"
-    public string expectedSource { get; set; } = "prod-current";
+    // expectedSource: "current" | "history"
+    public string expectedSource { get; set; } = "current";
 
     // Modes
     public bool oneStepMode { get; set; } = true;

@@ -14,11 +14,11 @@ var configuration = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .Build();
 
-
 Log.Logger = new LoggerConfiguration()
     .Enrich.FromLogContext()
-    .ReadFrom.Configuration(configuration)
+    .ReadFrom.Configuration(configuration.GetSection("Serilog_SubscriptionApi"))
     .CreateLogger();
+
 
 builder.Host.UseSerilog(Log.Logger, dispose: true);
 
@@ -29,8 +29,20 @@ builder.Services.AddSwaggerGen();             // generate OpenAPI + UI
 // (Optional) include XML docs later if you enable <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
 // ---- Bind options ----
-builder.Services.Configure<PlaygroundClientOptions>(
-    builder.Configuration.GetSection("PlaygroundClient"));
+// Agpme.Bbg.Playground.Subscriptions.Api/Program.cs
+builder.Services.Configure<PlaygroundClientOptions>(opts =>
+{
+    opts.ServerBaseUrl = builder.Configuration["SimulatorApiServer"]
+        ?? "http://localhost:6066";
+    opts.AsOfDate = null;  
+    opts.Chunk = true;    
+
+    // Build from SubscriptionTargets array (root)
+    var targets = builder.Configuration
+        .GetSection("SubscriptionTargets")
+        .Get<List<PlaygroundClientOptions.SubscriptionTarget>>() ?? new();
+    opts.Targets = targets;
+});
 
 // ---- HTTP client for streaming server ----
 builder.Services.AddHttpClient("playground", (sp, http) =>

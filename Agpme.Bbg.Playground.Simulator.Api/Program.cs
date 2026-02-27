@@ -1,7 +1,6 @@
 ﻿using Serilog;
 using Agpme.Bbg.Playground.Simulator.Api.Configuration;
 using Agpme.Bbg.Playground.Simulator.Api.Endpoints;
-using Microsoft.Extensions.Logging;
 
 
 Directory.SetCurrentDirectory(AppContext.BaseDirectory);
@@ -15,9 +14,8 @@ var configuration = new ConfigurationBuilder()
     .Build();
 
 Log.Logger = new LoggerConfiguration()
-    .Enrich
-    .FromLogContext()
-    .ReadFrom.Configuration(configuration)
+    .Enrich.FromLogContext()
+    .ReadFrom.Configuration(configuration.GetSection("Serilog_SimulatorApi"))
     .CreateLogger();
 
 Log.Information("Starting Stream Playground Server");

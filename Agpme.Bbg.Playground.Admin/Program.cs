@@ -8,8 +8,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddMudServices();
 
 // HttpClient to Subscriptions API
-var baseAddress = builder.Configuration.GetSection("SubscriptionsApi:BaseAddress").Value
-                  ?? "http://localhost:5171"; // fallback if config missing
+// Agpme.Bbg.Playground.Admin/Program.cs
+var baseAddress = builder.Configuration["SubscriptionApiServer"] ?? "http://localhost:5171";
 builder.Services.AddHttpClient("subsapi", http =>
 {
     http.BaseAddress = new Uri(baseAddress);

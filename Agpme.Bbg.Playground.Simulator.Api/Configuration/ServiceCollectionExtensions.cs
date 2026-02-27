@@ -13,30 +13,22 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // Bind the single-ARN settings (section name "StreamAwsSecrets")
-        services.Configure<AwsSecretsOptions>(configuration.GetSection("StreamAwsSecrets"));
 
         // Resolve the connection string from AWS once per app lifetime (lazy)
         services.AddSingleton(async sp =>
         {
-            var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AwsSecretsOptions>>().Value;
-            if (string.IsNullOrWhiteSpace(opts.Arn))
-                throw new InvalidOperationException("StreamAwsSecrets:Arn is required.");
-            if (string.IsNullOrWhiteSpace(opts.KeyName))
-                throw new InvalidOperationException("StreamAwsSecrets:KeyName is required.");
-            if (string.IsNullOrWhiteSpace(opts.Region))
-                throw new InvalidOperationException("StreamAwsSecrets:Region is required.");
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var env = cfg["TargetEnvironment"] ?? "uat";
+            var sec = cfg.GetSection($"TargetAwsSecrets_{env}");
+            var arn = sec["Arn"] ?? throw new InvalidOperationException("TargetAwsSecrets: Arn missing");
+            var key = sec["KeyName"] ?? throw new InvalidOperationException("TargetAwsSecrets: KeyName missing");
+            var region = sec["Region"] ?? throw new InvalidOperationException("TargetAwsSecrets: Region missing");
+            var profile = sec["Profile"]; // optional
 
-            // Use the NuGet helper. If Profile is null/empty, it will fall back to default chain.
-            var connString = await AwsSecretHelper.GetSecretValueAsync(
-                opts.Profile,              // profile or null
-                opts.Region!,              // required
-                opts.Arn!,                 // secretId
-                opts.KeyName!        // valueKey in SecretString JSON
-            );
-
-            return connString;
+            return await AwsSecretHelper.GetSecretValueAsync(profile, region, arn, key);
         });
+
+        // keep DataSource singleton the same; it uses the Task<string> you just registered
 
         // Create and share a single NpgsqlDataSource
         services.AddSingleton(async sp =>

@@ -90,9 +90,9 @@ public static class ClientEndpoints
         // Database health (local playground Postgres)
         app.MapGet("/client/health/db", async (Microsoft.Extensions.Configuration.IConfiguration cfg, CancellationToken ct) =>
         {
-            var cs = cfg.GetSection("ClientDb:ConnectionString").Value;
+            var cs = cfg["ConnectionString_Local"];
             if (string.IsNullOrWhiteSpace(cs))
-                return Results.Problem("ClientDb:ConnectionString is not configured.", statusCode: 500);
+                return Results.Problem("ConnectionString_Local is not configured.", statusCode: 500);
 
             try
             {
@@ -135,7 +135,7 @@ public static class ClientEndpoints
         metadata.MapGet("inbound-cols-map",
             async (IConfiguration cfg, CancellationToken ct) =>
             {
-                var cs = cfg.GetSection("ClientDb:ConnectionString").Value!;
+                var cs = cfg["ConnectionString_Local"];
                 var rows = await MetadataHelper.GetInboundColsMapAsync(cs, ct);
                 return Results.Ok(rows);
             });
@@ -144,7 +144,7 @@ public static class ClientEndpoints
         metadata.MapPut("inbound-cols-map/{mapId:long}",
             async (IConfiguration cfg, long mapId, MetadataHelper.InboundColsMapUpdate dto, CancellationToken ct) =>
             {
-                var cs = cfg.GetSection("ClientDb:ConnectionString").Value!;
+                var cs = cfg["ConnectionString_Local"];
                 var ok = await MetadataHelper.UpdateInboundColsMapAsync(cs, mapId, dto, ct);
                 return Results.Ok(ok);
             });
@@ -153,12 +153,13 @@ public static class ClientEndpoints
         metadata.MapPost("inbound-cols-map/resync",
             async (IConfiguration cfg, CancellationToken ct) =>
             {
-                var destCs = cfg.GetSection("ClientDb:ConnectionString").Value!;
-                // Source from your existing MetadataAwsSecrets block (same as Bootstrap)
-                var arn = cfg["MetadataAwsSecrets:Arn"]!;
-                var key = cfg["MetadataAwsSecrets:KeyName"]!;
-                var region = cfg["MetadataAwsSecrets:Region"]!;
-                var profile = cfg["MetadataAwsSecrets:Profile"]; // optional
+                var destCs = cfg["ConnectionString_Local"];
+                var menv = cfg["MetadataEnvironment"] ?? "dev";
+                var msec = cfg.GetSection($"MetadataAwsSecrets_{menv}");
+                var arn = msec["Arn"]!;
+                var key = msec["KeyName"]!;
+                var region = msec["Region"]!;
+                var profile = msec["Profile"];
                 var sourceCs = await Allspring.Agpme.Bbg.TestsShared.Helpers.Aws.AwsSecretHelper
                     .GetSecretValueAsync(profile, region, arn, key, ct);
 
@@ -170,7 +171,7 @@ public static class ClientEndpoints
         metadata.MapPost("inbound-cols-map/validate",
             async (IConfiguration cfg, ValidateDto dto, CancellationToken ct) =>
             {
-                var cs = cfg.GetSection("ClientDb:ConnectionString").Value!;
+                var cs = cfg["ConnectionString_Local"];
 
                 if (!string.IsNullOrWhiteSpace(dto.transform_expr))
                 {
