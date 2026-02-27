@@ -63,7 +63,7 @@ public sealed class PositionsCompareService : IPositionsCompareService
         {
             await actualConn.OpenAsync(ct);
             var actQuery = new BbgPositionsDb.Query(asOf, req.entityName);
-            actual = await BbgPositionsDb.QueryCurrentAsync(conn, actQuery);
+            actual = await BbgPositionsDb.QueryCurrentAsync(actualConn, actQuery);
         }
 
         if (expected.Count == 0)
