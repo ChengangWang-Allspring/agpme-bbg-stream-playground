@@ -7,6 +7,12 @@ var builder = WebApplication.CreateBuilder(args);
 // Add MudBlazor services
 builder.Services.AddMudServices();
 
+// Explicitly add the runtime appsettings so IConfiguration sees "TargetEnvironment"
+builder.Configuration
+    .AddJsonFile(System.IO.Path.Combine(AppContext.BaseDirectory, "appsettings.json"),
+                 optional: false, reloadOnChange: true)
+    .AddEnvironmentVariables();
+
 // HttpClient to Subscriptions API
 // Agpme.Bbg.Playground.Admin/Program.cs
 var baseAddress = builder.Configuration["SubscriptionApiServer"] ?? "http://localhost:5171";

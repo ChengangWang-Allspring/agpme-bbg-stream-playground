@@ -33,6 +33,12 @@
                    OnClick="ConfirmAndReset">
             Reset inbound + positions
         </MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Outlined"
+                   StartIcon="@Icons.Material.Filled.Sync"
+                   OnClick="ResyncMetadata">
+            Resync metadata (DEV → Local)
+        </MudButton>
     </MudStack>
 </MudPaper>
 
@@ -69,6 +75,19 @@
             {
                 Snackbar.Add($"Reset failed: {ex.Message}", Severity.Error);
             }
+        }
+    }
+
+    private async Task ResyncMetadata()
+    {
+        try
+        {
+            var rows = await Api.ResyncInboundColsMapAsync();  // POST /client/metadata/inbound-cols-map/resync
+            Snackbar.Add($"Metadata resynced from DEV. Rows copied: {rows}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Metadata resync failed: {ex.Message}", Severity.Error);
         }
     }
 }
