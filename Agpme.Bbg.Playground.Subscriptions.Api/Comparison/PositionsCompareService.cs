@@ -32,37 +32,38 @@ public sealed class PositionsCompareService : IPositionsCompareService
             : req.outputRoot!;
         Directory.CreateDirectory(outputRoot);
 
-        // 2) Load EXPECTED (PROD only)
-        List<BbgPosition> expected = new();
-        if (string.Equals(req.expectedSource, "prod-current", StringComparison.OrdinalIgnoreCase))
+        // 2) Load EXPECTED based on current/history only.
+        // Environment chosen by "StreamAwsSecrets:Profile" (uat/prod).
+
+        var prodCs = await GetProdConnectionStringAsync(ct);
+        await using var conn = new NpgsqlConnection(prodCs);
+        await conn.OpenAsync(ct);
+
+        var q = new BbgPositionsDb.Query(asOf, req.entityName);
+
+        List<BbgPosition> expected;
+
+        if (string.Equals(req.expectedSource, "current", StringComparison.OrdinalIgnoreCase))
         {
-            var prodCs = await GetProdConnectionStringAsync(ct);
-            await using var conn = new NpgsqlConnection(prodCs);
-            await conn.OpenAsync(ct);
-            var q = new BbgPositionsDb.Query(asOf, req.entityName);
             expected = await BbgPositionsDb.QueryCurrentAsync(conn, q);
         }
-        else if (string.Equals(req.expectedSource, "prod-history", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(req.expectedSource, "history", StringComparison.OrdinalIgnoreCase))
         {
-            var prodCs = await GetProdConnectionStringAsync(ct);
-            await using var conn = new NpgsqlConnection(prodCs);
-            await conn.OpenAsync(ct);
-            var q = new BbgPositionsDb.Query(asOf, req.entityName);
             expected = await BbgPositionsDb.QueryHistoryAsync(conn, q);
         }
         else
         {
-            return Fail($"Unsupported expectedSource '{req.expectedSource}'. Use 'prod-current' or 'prod-history'.", outputRoot);
+            return Fail("expectedSource must be 'current' or 'history'.", outputRoot);
         }
 
 
         // 3) Load ACTUAL (local current)
         List<BbgPosition> actual;
-        await using (var conn = new NpgsqlConnection(_localCs))
+        await using (var actualConn = new NpgsqlConnection(_localCs))
         {
-            await conn.OpenAsync(ct);
-            var q = new BbgPositionsDb.Query(asOf, req.entityName);
-            actual = await BbgPositionsDb.QueryCurrentAsync(conn, q);
+            await actualConn.OpenAsync(ct);
+            var actQuery = new BbgPositionsDb.Query(asOf, req.entityName);
+            actual = await BbgPositionsDb.QueryCurrentAsync(conn, actQuery);
         }
 
         if (expected.Count == 0)
@@ -133,13 +134,13 @@ public sealed class PositionsCompareService : IPositionsCompareService
     // Resolve the PROD connection string via StreamAwsSecrets + shared AWS helper
     private async Task<string> GetProdConnectionStringAsync(CancellationToken ct)
     {
-        var region = _cfg["ProdAwsSecrets:Region"]
-            ?? throw new InvalidOperationException("ProdAwsSecrets:Region is required.");
-        var arn = _cfg["ProdAwsSecrets:Arn"]
-            ?? throw new InvalidOperationException("ProdAwsSecrets:Arn is required.");
-        var keyName = _cfg["ProdAwsSecrets:KeyName"]
+        var region = _cfg["StreamAwsSecrets:Region"]
+            ?? throw new InvalidOperationException("StreamAwsSecrets:Region is required.");
+        var arn = _cfg["StreamAwsSecrets:Arn"]
+            ?? throw new InvalidOperationException("StreamAwsSecrets:Arn is required.");
+        var keyName = _cfg["StreamAwsSecrets:KeyName"]
             ?? throw new InvalidOperationException("StreamAwsSecrets:KeyName is required.");
-        var profile = _cfg["ProdAwsSecrets:Profile"]; // optional
+        var profile = _cfg["StreamAwsSecrets:Profile"]; // optional
 
         var cs = await Allspring.Agpme.Bbg.TestsShared.Helpers.Aws.AwsSecretHelper
             .GetSecretValueAsync(profile, region, arn, keyName, ct);

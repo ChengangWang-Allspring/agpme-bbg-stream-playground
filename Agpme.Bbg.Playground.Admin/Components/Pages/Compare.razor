@@ -15,11 +15,16 @@
     </MudStack>
 
     <MudForm Class="mt-4">
+
+        <!-- ====================== TOP: ACTUAL vs EXPECTED ====================== -->
         <MudGrid Class="mt-1">
             <!-- LEFT = Playground (“Actual” from local) -->
-            <MudItem xs="12" md="6">
+            <MudItem xs="12" md="5">
                 <MudPaper Class="pa-3">
-                    <MudText Typo="Typo.h6">Playground Position (Actual)</MudText>
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                        <MudIcon Icon="@Icons.Material.Filled.Storage" Color="Color.Info" />
+                        <MudText Typo="Typo.h6">Playground Position (Actual)</MudText>
+                    </MudStack>
                     <MudText Typo="Typo.caption" Class="mb-2">
                         Reads from local <code>app_data.bbg_positions</code> using the inputs below.
                     </MudText>
@@ -29,7 +34,7 @@
                         <MudSelect T="string"
                                    Label="Entity Type"
                                    Value="@_req.entityType"
-                                   ValueChanged="@( (string v) => { _req.entityType = v; RebuildEntityNames(); StateHasChanged(); } )"
+                                   ValueChanged="@((string v) => { _req.entityType = v; RebuildEntityNames(); StateHasChanged(); })"
                                    Dense="true" Style="width: 180px;">
                             <MudSelectItem Value="@("accounts")">accounts</MudSelectItem>
                             <MudSelectItem Value="@("groups")">groups</MudSelectItem>
@@ -50,23 +55,33 @@
                 </MudPaper>
             </MudItem>
 
+            <!-- CENTER = two-way arrows (decorative/clarifying) -->
+            <MudItem xs="12" md="2" Class="d-none d-md-flex justify-center">
+                <div class="compare-arrows">
+                    <MudIcon Icon="@Icons.Material.Filled.CompareArrows" Size="Size.Large" Color="Color.Primary" />
+                    <MudText Typo="Typo.caption" Align="Align.Center" Class="mt-1">Compare</MudText>
+                </div>
+            </MudItem>
+
             <!-- RIGHT = PROD (“Expected”) -->
-            <MudItem xs="12" md="6">
+            <MudItem xs="12" md="5">
                 <MudPaper Class="pa-3">
-                    <MudText Typo="Typo.h6">PROD (Expected)</MudText>
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                        <MudIcon Icon="@Icons.Material.Filled.CloudDone" Color="Color.Success" />
+                        <MudText Typo="Typo.h6">Expected (UAT or PROD in appsettings.json)</MudText>
+                    </MudStack>
                     <MudText Typo="Typo.caption" Class="mb-2">
-                        Read-only DB via AWS secret. Choose whether to compare against PROD <b>current</b> or PROD <b>history</b>.
+                        Read-only DB via AWS secret. Choose whether to compare against <b>current</b> or <b>history</b>.
                     </MudText>
 
-                    <!-- Current vs History selector (maps to CompareRequest.expectedSource) -->
+                    <!-- Current vs History selector -->
                     <MudRadioGroup T="string" @bind-Value="_req.expectedSource">
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
-                            <MudRadio T="string" Value="@("prod-current")">PROD current</MudRadio>
-                            <MudRadio T="string" Value="@("prod-history")">PROD history</MudRadio>
+                            <MudRadio T="string" Value="@("current")">Current</MudRadio>
+                            <MudRadio T="string" Value="@("history")">History</MudRadio>
                         </MudStack>
                     </MudRadioGroup>
 
-                    <!-- Optional: explain as-of usage -->
                     <MudText Typo="Typo.caption" Class="mt-1">
                         The same <b>As-of</b> date (left) is used for both sides.
                         “PROD current” queries production <code>bbg_positions</code>.
@@ -76,6 +91,15 @@
             </MudItem>
         </MudGrid>
 
+        <!-- ====================== SECTION: Compare Options ====================== -->
+        <MudStack Class="mt-4" Spacing="1">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                <MudIcon Icon="@Icons.Material.Filled.Tune" Color="Color.Default" />
+                <MudText Typo="Typo.subtitle1">Compare Options</MudText>
+            </MudStack>
+            <MudDivider Class="mb-2" />
+        </MudStack>
+
         <!-- Mode -->
         <MudStack Row="true" Spacing="2" Class="mt-3" AlignItems="AlignItems.Center">
             <MudRadioGroup T="string" @bind-Value="_mode">
@@ -84,7 +108,6 @@
                     <MudRadio T="string" Value="@("TwoSteps")">Two-Steps</MudRadio>
                 </MudStack>
             </MudRadioGroup>
-
             <MudSwitch T="bool" @bind-Value="_req.useAllFields" Label="Use All Fields (implies One-Step)" />
             <MudSwitch T="bool" @bind-Value="_req.stringCaseInsensitive" Label="Case-insensitive strings" />
             <MudNumericField @bind-Value="_req.numericTolerance" Label="Numeric tolerance" Margin="Margin.Dense" Style="width: 180px;" />
@@ -136,7 +159,6 @@
                             <MudSelectItem Value="@f">@f</MudSelectItem>
                         }
                     </MudSelect>
-
                 </MudStack>
             </MudExpansionPanel>
 
@@ -193,11 +215,23 @@
     }
 </MudPaper>
 
+<style>
+    .compare-arrows {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100%;
+        padding-top: 12px;
+        padding-bottom: 12px;
+        opacity: 0.9;
+    }
+</style>
+
 @code {
     private CompareOptions? _options;
     private CompareOptions.Defaults? _defaults => _options?.defaults;
     private string[] _keyOrder = Array.Empty<string>();
-
     private readonly CompareRequestDto _req = new();
     private CompareResponseDto? _result;
     private DateTime? _asOfPick;
@@ -208,19 +242,14 @@
     private HashSet<string> _phase2Sel = new(StringComparer.Ordinal);
     private HashSet<string> _excludedSel = new(StringComparer.Ordinal);
 
-
     private List<Target> _targets = new();
     private List<string> _entityNames = new();
-
 
     protected override async Task OnInitializedAsync()
     {
         await LoadOptions();
-
-        // Load configured targets from Subscriptions API
         _targets = await SubsApi.GetTargetsAsync() ?? new();
-
-        ResetForm();        // <-- will set defaults (type/names)
+        ResetForm(); // <-- will set defaults (type/names)
     }
 
     private async Task LoadOptions()
@@ -232,9 +261,9 @@
 
     private async Task ReloadOptionsAndReset()
     {
-        await LoadOptions();      // get latest key order + defaults
-        ResetForm();              // reapply defaults to the request + lists
-        StateHasChanged();        // make the refresh deterministic
+        await LoadOptions(); // get latest key order + defaults
+        ResetForm();         // reapply defaults to the request + lists
+        StateHasChanged();   // make the refresh deterministic
     }
 
     // Utility: (re)build the entity-name list for the current type
@@ -248,7 +277,6 @@
             .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        // If current name is not in the list, pick first (or blank if none)
         if (_entityNames.Count == 0)
         {
             _req.entityName = "";
@@ -257,13 +285,6 @@
         {
             _req.entityName = _entityNames[0];
         }
-    }
-
-    // React to user switching accounts/groups
-    private void OnEntityTypeChanged(string newType)
-    {
-        _req.entityType = newType;
-        RebuildEntityNames();
     }
 
     private void OnPhase1Changed(IEnumerable<string> values)
@@ -275,7 +296,6 @@
     private void OnExcludedChanged(IEnumerable<string> values)
         => _excludedSel = values is HashSet<string> hs ? hs : new HashSet<string>(values, StringComparer.Ordinal);
 
-
     private void ResetForm()
     {
         _mode = "OneStep";
@@ -283,7 +303,8 @@
         RebuildEntityNames();
         _req.entityName = _entityNames.FirstOrDefault() ?? "";
         _asOfPick = DateTime.Today;
-        _req.expectedSource = "prod-current";
+
+        _req.expectedSource = "current";
         _req.oneStepMode = true;
         _req.twoStepsMode = false;
         _req.useAllFields = true;
@@ -292,7 +313,6 @@
         _req.savePolicy = "OnFailure";
         _req.outputRoot = null;
 
-        // Start with no overrides (library defaults will apply)
         _phase1Sel.Clear();
         _phase2Sel.Clear();
         _excludedSel = new HashSet<string>(_defaults?.excluded ?? Array.Empty<string>(), StringComparer.Ordinal);
@@ -311,7 +331,6 @@
         _req.asOfDate = (_asOfPick ?? DateTime.Today).ToString("yyyy-MM-dd");
         _req.oneStepMode = (_mode == "OneStep") || _req.useAllFields;
         _req.twoStepsMode = (_mode == "TwoSteps");
-
         _req.phase1Fields = _phase1Sel.Count > 0 ? _phase1Sel : null;
         _req.phase2Fields = _mode == "TwoSteps" && _phase2Sel.Count > 0 ? _phase2Sel : null;
         _req.excludedFields = _excludedSel.Count > 0 ? _excludedSel : null;
