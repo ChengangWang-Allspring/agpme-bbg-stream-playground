@@ -90,13 +90,18 @@ public sealed class PositionsCompareService : IPositionsCompareService
         // 6) Materialize CSVs per save policy
         var saveAlways = string.Equals(req.savePolicy, "Always", StringComparison.OrdinalIgnoreCase);
         var saveOnFailure = string.Equals(req.savePolicy, "OnFailure", StringComparison.OrdinalIgnoreCase);
+        bool wrote = false;
         if (saveAlways || (saveOnFailure && !res.IsSuccess))
         {
-            session.WriteCsvs(outputRoot, testName: "bbg_positions"); // writes phase1 (and phase2 if present) CSVs 
+            // Ensure the output folder exists only when we’re going to write
+            Directory.CreateDirectory(outputRoot);
+            session.WriteCsvs(outputRoot, testName: "bbg_positions");
+            wrote = true;
         }
 
         // 7) Build response (bounded message using rich formatter)
         var msg = session.GetFailureMessage(maxLines: 200, header: "Compare failed", useRichFormatter: true); // 
+
         return new CompareResponse
         {
             success = res.IsSuccess,
@@ -105,8 +110,8 @@ public sealed class PositionsCompareService : IPositionsCompareService
             actualCount = actual.Count,
             phase1Diffs = res.Phase1?.PerKeyMismatches?.Sum(kv => kv.Value.Count),
             phase2Diffs = res.Phase2?.PerKeyMismatches?.Sum(kv => kv.Value.Count),
-            outputDir = outputRoot,
-            paths = new
+            outputDir = wrote ? outputRoot : null,
+            paths = wrote ? new
             {
                 phase1 = new
                 {
@@ -118,7 +123,7 @@ public sealed class PositionsCompareService : IPositionsCompareService
                     expectedCsv = Path.Combine(outputRoot, "phase2", "expected.csv"),
                     actualCsv = Path.Combine(outputRoot, "phase2", "actual.csv")
                 }
-            }
+            } : null
         };
 
         static CompareResponse Fail(string reason, string dir) =>
