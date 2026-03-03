@@ -20,7 +20,7 @@
         <!-- ====================== TOP: ACTUAL vs EXPECTED ====================== -->
         <MudGrid Class="mt-1">
             <!-- LEFT = Playground (“Actual” from local) -->
-            <MudItem xs="12" md="5">
+            <MudItem xs="12" md="6">
                 <MudPaper Class="pa-3">
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
                         <MudIcon Icon="@Icons.Material.Filled.Storage" Color="Color.Info" />
@@ -51,7 +51,7 @@
 
                         <!-- As-Of date -->
                         <MudDatePicker @bind-Date="_asOfPick" Label="As-of (Actual)" DateFormat="yyyy-MM-dd"
-                                       Margin="Margin.Dense" Clearable="true" />
+                                       Margin="Margin.Dense" Clearable="true" Style="min-width: 220px;" />
                     </MudStack>
                 </MudPaper>
             </MudItem>
@@ -65,7 +65,7 @@
             </MudItem>
 
             <!-- RIGHT = PROD (“Expected”) -->
-            <MudItem xs="12" md="5">
+            <MudItem xs="12" md="4">
                 <MudPaper Class="pa-3">
                     <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
                         <MudIcon Icon="@Icons.Material.Filled.CloudDone" Color="Color.Success" />

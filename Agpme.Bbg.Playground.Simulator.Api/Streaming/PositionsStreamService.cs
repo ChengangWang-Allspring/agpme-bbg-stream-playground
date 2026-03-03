@@ -78,10 +78,18 @@ public sealed class PositionsStreamService : IPositionsStreamService
                     "Initial paint: sending {Count} rows → {EntityName}-{EntityType} ({MsgId})",
                     initial.jsonRows.Count, entityName, entityType, logMsgIdNow);
 
-                foreach (var json in initial.jsonRows)
-                    await JsonWriterUtil.WriteJsonAsync(http, json, chunk, ct);
+                //foreach (var json in initial.jsonRows)
+                //    await JsonWriterUtil.WriteJsonAsync(http, json, chunk, ct);
+                //await http.Response.Body.FlushAsync(ct);
 
-                await http.Response.Body.FlushAsync(ct);
+                int sent = 0;
+                foreach (var json in initial.jsonRows)
+                {
+                    await JsonWriterUtil.WriteJsonAsync(http, json, chunk, ct);
+                    if ((++sent % 200) == 0) // flush every 200 rows (~tunable)
+                        await http.Response.Body.FlushAsync(ct);
+                }
+                await http.Response.Body.FlushAsync(ct); // final flush
 
                 Log.Information(
                     "Initial paint complete. Emitting {Count} empty {{}} markers → {EntityName}-{EntityType} ({MsgId})",
