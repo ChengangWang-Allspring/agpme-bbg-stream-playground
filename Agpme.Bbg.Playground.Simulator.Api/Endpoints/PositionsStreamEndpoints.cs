@@ -12,7 +12,7 @@ public static class PositionsStreamEndpoints
                    string entityType,
                    string entityName,
                    DateOnly? as_of_date,
-                   bool chunk,
+                   bool? chunk,
                    IPositionsStreamService streamService,
                    CancellationToken ct) =>
             {
@@ -21,6 +21,7 @@ public static class PositionsStreamEndpoints
                     return Results.BadRequest(new { error = "Both entityType and entityName are required." });
 
                 var asOf = as_of_date ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                var doChunk = chunk ?? true; // default here
 
                 // Generate a stable request id for this subscription (client will persist it)
                 var msgRequestId = Guid.NewGuid().ToString("N");
@@ -35,7 +36,7 @@ public static class PositionsStreamEndpoints
                 await http.Response.StartAsync(ct);
 
                 await streamService.StreamAsync(
-                    http, entityType, entityName, asOf, chunk, ct);
+                    http, entityType, entityName, asOf, doChunk, ct);
 
                 return Results.Empty;
             });
