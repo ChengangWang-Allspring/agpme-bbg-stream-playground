@@ -20,7 +20,7 @@ public static class PositionsStreamEndpoints
                 if (string.IsNullOrWhiteSpace(entityType) || string.IsNullOrWhiteSpace(entityName))
                     return Results.BadRequest(new { error = "Both entityType and entityName are required." });
 
-                var asOf = as_of_date ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                var asOf = as_of_date ?? DateOnly.FromDateTime(DateTime.Now);
                 var doChunk = chunk ?? true; // default here
 
                 // Generate a stable request id for this subscription (client will persist it)
